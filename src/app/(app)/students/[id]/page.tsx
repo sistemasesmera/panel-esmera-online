@@ -33,7 +33,7 @@ export default async function StudentDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireCapability("manageStudents");
+  await requireCapability("viewStudents");
   const { id } = await params;
   const db = createAdminClient() as any;
 

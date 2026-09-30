@@ -11,8 +11,11 @@ export const ROLE_LABELS: Record<AppRole, string> = {
 export const CAPABILITIES = {
   viewPipeline:       ["setter", "closer", "administracion"] as AppRole[],
   viewFullPipeline:   ["administracion"] as AppRole[],
+  viewEnrollments:    ["setter", "closer", "administracion"] as AppRole[],
   manageEnrollments:  ["administracion"] as AppRole[],
+  viewStudents:       ["setter", "closer", "administracion", "tutor"] as AppRole[],
   manageStudents:     ["administracion", "tutor"] as AppRole[],
+  viewCourses:        ["setter", "closer", "administracion"] as AppRole[],
   manageCourses:      ["administracion"] as AppRole[],
   viewTutoring:       ["tutor", "administracion"] as AppRole[],
   viewLogs:           ["administracion"] as AppRole[],

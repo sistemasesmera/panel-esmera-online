@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { BookOpen } from "lucide-react";
 import { requireCapability } from "@/lib/auth/require-role";
 import { listCourses } from "@/lib/data/courses.repository";
 import { CoursesClient } from "@/components/features/courses/courses-client";
@@ -7,12 +6,12 @@ import { CoursesClient } from "@/components/features/courses/courses-client";
 export const metadata: Metadata = { title: "Cursos" };
 
 export default async function CoursesPage() {
-  await requireCapability("manageCourses");
+  const user = await requireCapability("viewCourses");
   const courses = await listCourses();
 
   return (
     <div>
-      <CoursesClient courses={courses} />
+      <CoursesClient courses={courses} readOnly={user.role !== "administracion"} />
     </div>
   );
 }

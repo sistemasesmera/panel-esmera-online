@@ -27,7 +27,7 @@ export default async function EnrollmentDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireCapability("manageEnrollments");
+  await requireCapability("viewEnrollments");
   const { id } = await params;
   const db = createAdminClient() as any;
 

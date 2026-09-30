@@ -29,9 +29,9 @@ const GROUPS: NavGroup[] = [
   {
     label: "Académico",
     items: [
-      { label: "Alumnos",    href: "/students",     icon: GraduationCap, roles: ["administracion", "tutor"] },
-      { label: "Matrículas", href: "/enrollments",  icon: BookMarked,    roles: ["administracion"] },
-      { label: "Cursos",     href: "/courses",      icon: BookOpen,      roles: ["administracion"] },
+      { label: "Alumnos",    href: "/students",     icon: GraduationCap, roles: ["setter", "closer", "administracion", "tutor"] },
+      { label: "Matrículas", href: "/enrollments",  icon: BookMarked,    roles: ["setter", "closer", "administracion"] },
+      { label: "Cursos",     href: "/courses",      icon: BookOpen,      roles: ["setter", "closer", "administracion"] },
       { label: "Tutorías",   href: "/tutoring",     icon: CalendarCheck, roles: ["tutor", "administracion"] },
     ],
   },

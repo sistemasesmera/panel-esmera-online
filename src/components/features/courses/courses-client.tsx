@@ -20,7 +20,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   "Diseño gráfico y Web":            "bg-cyan-100 text-cyan-700",
 };
 
-export function CoursesClient({ courses }: { courses: Course[] }) {
+export function CoursesClient({ courses, readOnly = false }: { courses: Course[]; readOnly?: boolean }) {
   const router = useRouter();
   const [dialog, setDialog] = useState<{ open: boolean; course?: Course }>({ open: false });
   const [toggling, startToggle] = useTransition();
@@ -54,25 +54,29 @@ export function CoursesClient({ courses }: { courses: Course[] }) {
             {courses.length} cursos · {Object.keys(grouped).length} categorías
           </p>
         </div>
-        <button
-          onClick={() => setDialog({ open: true })}
-          className="cursor-pointer inline-flex items-center gap-2 bg-indigo-600 text-white text-sm font-semibold px-4 py-2.5 rounded-lg hover:bg-indigo-700 transition-colors"
-        >
-          <Plus className="h-4 w-4" />
-          Nuevo curso
-        </button>
+        {!readOnly && (
+          <button
+            onClick={() => setDialog({ open: true })}
+            className="cursor-pointer inline-flex items-center gap-2 bg-indigo-600 text-white text-sm font-semibold px-4 py-2.5 rounded-lg hover:bg-indigo-700 transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            Nuevo curso
+          </button>
+        )}
       </div>
 
       {courses.length === 0 ? (
         <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
           <BookOpen className="h-8 w-8 text-slate-300 mx-auto mb-3" />
           <p className="text-sm font-semibold text-slate-500 mb-4">No hay cursos registrados aún</p>
-          <button
-            onClick={() => setDialog({ open: true })}
-            className="cursor-pointer inline-flex items-center gap-2 bg-indigo-600 text-white text-sm font-semibold px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors"
-          >
-            <Plus className="h-4 w-4" /> Crear primer curso
-          </button>
+          {!readOnly && (
+            <button
+              onClick={() => setDialog({ open: true })}
+              className="cursor-pointer inline-flex items-center gap-2 bg-indigo-600 text-white text-sm font-semibold px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors"
+            >
+              <Plus className="h-4 w-4" /> Crear primer curso
+            </button>
+          )}
         </div>
       ) : (
         <div className="space-y-8">
@@ -104,30 +108,37 @@ export function CoursesClient({ courses }: { courses: Course[] }) {
                         )}
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0">
-                        {/* Toggle active */}
-                        <button
-                          onClick={() => handleToggle(c)}
-                          disabled={toggling}
-                          title={c.active ? "Desactivar" : "Activar"}
-                          className={cn(
-                            "cursor-pointer flex items-center gap-1 text-[11px] font-semibold transition-colors",
-                            c.active ? "text-emerald-600 hover:text-slate-400" : "text-slate-400 hover:text-emerald-600"
-                          )}
-                        >
-                          {c.active
-                            ? <CheckCircle className="h-3.5 w-3.5" />
-                            : <XCircle className="h-3.5 w-3.5" />
-                          }
-                          {c.active ? "Activo" : "Inactivo"}
-                        </button>
-                        {/* Edit */}
-                        <button
-                          onClick={() => setDialog({ open: true, course: c })}
-                          title="Editar curso"
-                          className="cursor-pointer p-1 text-slate-300 hover:text-indigo-600 transition-colors"
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </button>
+                        {readOnly ? (
+                          <span className={cn(
+                            "flex items-center gap-1 text-[11px] font-semibold",
+                            c.active ? "text-emerald-600" : "text-slate-400"
+                          )}>
+                            {c.active ? <CheckCircle className="h-3.5 w-3.5" /> : <XCircle className="h-3.5 w-3.5" />}
+                            {c.active ? "Activo" : "Inactivo"}
+                          </span>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => handleToggle(c)}
+                              disabled={toggling}
+                              title={c.active ? "Desactivar" : "Activar"}
+                              className={cn(
+                                "cursor-pointer flex items-center gap-1 text-[11px] font-semibold transition-colors",
+                                c.active ? "text-emerald-600 hover:text-slate-400" : "text-slate-400 hover:text-emerald-600"
+                              )}
+                            >
+                              {c.active ? <CheckCircle className="h-3.5 w-3.5" /> : <XCircle className="h-3.5 w-3.5" />}
+                              {c.active ? "Activo" : "Inactivo"}
+                            </button>
+                            <button
+                              onClick={() => setDialog({ open: true, course: c })}
+                              title="Editar curso"
+                              className="cursor-pointer p-1 text-slate-300 hover:text-indigo-600 transition-colors"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                          </>
+                        )}
                       </div>
                     </div>
 
