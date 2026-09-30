@@ -470,10 +470,9 @@ export async function createLead(
     // Auto-assign current user as setter
     const db2 = createAdminClient() as any;
     await db2.from("lead_profiles").upsert({
-      ghl_contact_id:     contact.id,
-      ghl_opportunity_id: opp.id,
-      setter_id:          user.id,
-      setter_name:        user.fullName ?? user.email ?? "Sistema",
+      ghl_contact_id: contact.id,
+      setter_id:      user.id,
+      setter_name:    user.fullName ?? user.email ?? "Sistema",
     }, { onConflict: "ghl_contact_id" }).then(() => {}, () => {});
 
     return { success: true, contactId: contact.id, oppId: opp.id };
@@ -497,7 +496,7 @@ export async function assignLeadMember(
     : { closer_id: memberId, closer_name: memberName };
 
   const { error } = await db.from("lead_profiles").upsert(
-    { ghl_contact_id: contactId, ghl_opportunity_id: oppId, ...field },
+    { ghl_contact_id: contactId, ...field },
     { onConflict: "ghl_contact_id" },
   );
   if (error) return { error: error.message };
