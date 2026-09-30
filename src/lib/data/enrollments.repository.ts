@@ -48,7 +48,7 @@ export async function listEnrollmentsForTutor(userId: string): Promise<Enrollmen
 export async function listEnrollmentsForUser(userId: string): Promise<EnrollmentRow[]> {
   const db = createAdminClient() as any;
 
-  // Path A: GHL-linked enrollments
+  // Path A: GHL-linked enrollments (via lead_profiles)
   const { data: profiles } = await db
     .from("lead_profiles")
     .select("ghl_contact_id")
@@ -66,11 +66,11 @@ export async function listEnrollmentsForUser(userId: string): Promise<Enrollment
     }
   }
 
-  // Path B: directly assigned enrollments
+  // Path B: directly assigned via setter_id or closer_id
   const { data: directData } = await db
     .from("enrollments")
     .select(ENROLLMENT_SELECT)
-    .eq("assigned_to", userId)
+    .or(`setter_id.eq.${userId},closer_id.eq.${userId}`)
     .is("deleted_at", null);
 
   const directRows = (directData ?? []) as unknown as EnrollmentRow[];

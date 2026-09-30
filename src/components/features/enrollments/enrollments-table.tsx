@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import Link from "next/link";
 import { ArrowRight, BookMarked, Search, X } from "lucide-react";
-import { cn, formatDate } from "@/lib/utils";
+import { cn, formatDate, formatDateTime } from "@/lib/utils";
 
 const STATUS_OPTIONS = [
   { value: "pendiente_firma", label: "Pendiente de firma", cls: "bg-amber-50 text-amber-600 ring-1 ring-amber-200/60" },
@@ -186,7 +186,7 @@ export function EnrollmentsTable({ enrollments }: { enrollments: Enrollment[] })
                       </span>
                     </td>
                     <td className="px-5 py-3.5 text-xs text-slate-400 font-medium whitespace-nowrap">
-                      {formatDate(e.enrollment_date)}
+                      {formatDateTime(e.enrollment_date)}
                     </td>
                     <td className="px-5 py-3.5 text-xs text-slate-400 font-medium whitespace-nowrap">
                       {e.start_date ? formatDate(e.start_date) : <span className="text-slate-300">—</span>}

@@ -46,11 +46,11 @@ export async function listStudentsForUser(userId: string): Promise<Student[]> {
     ghlStudents = (data ?? []) as Student[];
   }
 
-  // Path B: students via directly assigned enrollments
+  // Path B: students via enrollments where user is setter or closer
   const { data: assigned } = await db
     .from("enrollments")
     .select("student_id")
-    .eq("assigned_to", userId)
+    .or(`setter_id.eq.${userId},closer_id.eq.${userId}`)
     .is("deleted_at", null);
 
   const directIds: string[] = [...new Set<string>((assigned ?? []).map((e: any) => e.student_id).filter(Boolean))];
