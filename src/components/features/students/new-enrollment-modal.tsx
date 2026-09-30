@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { X, BookMarked, CheckCircle2, ArrowRight } from "lucide-react";
+import { X, BookMarked, CheckCircle2, ArrowRight, Info } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { createEnrollmentFromStudent } from "@/app/(app)/students/[id]/actions";
@@ -42,6 +42,7 @@ export function NewEnrollmentModal({
   const [amount,         setAmount]         = useState("");
   const [paymentType,    setPaymentType]    = useState<PaymentType>("contado");
   const [paymentOption,  setPaymentOption]  = useState<PaymentOption>("efectivo");
+  const [durationMonths, setDurationMonths] = useState("");
   const [enrollNumber,   setEnrollNumber]   = useState<number | null>(null);
   const [enrollId,       setEnrollId]       = useState<string | null>(null);
 
@@ -62,7 +63,8 @@ export function NewEnrollmentModal({
     if (!amt || amt <= 0)    { toast.error("El importe debe ser mayor que 0"); return; }
 
     startTransition(async () => {
-      const res = await createEnrollmentFromStudent(studentId, courseId, amt, paymentType, paymentOption);
+      const dur = durationMonths ? parseInt(durationMonths) : null;
+      const res = await createEnrollmentFromStudent(studentId, courseId, amt, paymentType, paymentOption, dur);
       if ("error" in res) { toast.error(res.error); return; }
       setEnrollNumber(res.enrollmentNumber);
       setEnrollId(res.enrollmentId);
@@ -189,6 +191,25 @@ export function NewEnrollmentModal({
                   {opt.label}
                 </button>
               ))}
+            </div>
+          </div>
+          {/* Duration */}
+          <div>
+            <label className={labelCls}>Duración (meses)</label>
+            <input
+              type="number"
+              min={1}
+              max={60}
+              value={durationMonths}
+              onChange={e => setDurationMonths(e.target.value)}
+              placeholder="Ej: 6"
+              className={inputCls}
+            />
+            <div className="mt-2 flex items-start gap-1.5 rounded-lg bg-indigo-50 border border-indigo-100 px-3 py-2">
+              <Info className="h-3.5 w-3.5 text-indigo-400 shrink-0 mt-0.5" />
+              <p className="text-xs text-indigo-600">
+                La matrícula correrá desde que se firme el contrato. La fecha de fin se calculará automáticamente.
+              </p>
             </div>
           </div>
         </div>

@@ -10,6 +10,7 @@ export async function createEnrollmentFromStudent(
   amount: number,
   paymentType: "contado" | "financiado",
   paymentOption: string,
+  durationMonths: number | null = null,
 ): Promise<{ success: true; enrollmentNumber: number; enrollmentId: string } | { error: string }> {
   const user = await requireCapability("manageEnrollments");
   const db = createAdminClient() as any;
@@ -22,11 +23,12 @@ export async function createEnrollmentFromStudent(
   const { data: enrollment, error: enrollErr } = await db
     .from("enrollments")
     .insert({
-      student_id:  studentId,
-      course_id:   courseId,
-      status:      "pendiente_firma",
-      origin:      "manual",
-      assigned_to: user.id,
+      student_id:      studentId,
+      course_id:       courseId,
+      status:          "pendiente_firma",
+      origin:          "manual",
+      assigned_to:     user.id,
+      duration_months: durationMonths,
     })
     .select("id, enrollment_number")
     .single();
