@@ -960,7 +960,18 @@ function AssignMemberModal({
                 <div className="h-7 w-7 rounded-full bg-gradient-to-br from-indigo-400 to-indigo-600 flex items-center justify-center text-white text-[10px] font-black shrink-0">
                   {(m.full_name ?? "?").split(" ").slice(0, 2).map(n => n[0]).join("").toUpperCase()}
                 </div>
-                {m.full_name ?? m.id}
+                <div className="flex flex-col leading-tight min-w-0">
+                  <span className="truncate">{m.full_name ?? m.id}</span>
+                  <span className={cn(
+                    "text-[10px] font-bold uppercase tracking-wide",
+                    m.role === "setter"        ? "text-sky-500" :
+                    m.role === "closer"        ? "text-violet-500" :
+                    m.role === "administracion"? "text-indigo-500" :
+                                                 "text-slate-400"
+                  )}>
+                    {m.role === "administracion" ? "Admin" : m.role}
+                  </span>
+                </div>
               </button>
             ))
           )}
