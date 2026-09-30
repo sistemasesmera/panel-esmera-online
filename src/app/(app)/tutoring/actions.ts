@@ -5,36 +5,55 @@ import { requireCapability } from "@/lib/auth/require-role";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { z } from "zod";
 
-const createSchema = z.object({
-  enrollment_id:    z.string().uuid("Selecciona una matrícula"),
-  contact_type:     z.enum(["escrito", "llamada", "videollamada", "presencial"]),
-  session_date:     z.string().min(1, "La fecha es requerida"),
-  notes:            z.string().optional(),
-  duration_minutes: z.number().int().positive().optional().nullable(),
+const CONTACT_TYPES = ["llamada", "email", "videollamada"] as const;
+
+const sessionSchema = z.object({
+  enrollment_id: z.string().uuid("Selecciona una matrícula"),
+  contact_type:  z.enum(CONTACT_TYPES),
+  session_date:  z.string().min(1, "La fecha es requerida"),
+  notes:         z.string().optional(),
 });
 
-export type CreateSessionInput = z.infer<typeof createSchema>;
+export type CreateSessionInput = z.infer<typeof sessionSchema>;
 
 type ActionResult = { error: string; success?: never } | { success: true; error?: never };
 
 export async function createTutoringSession(input: CreateSessionInput): Promise<ActionResult> {
-  const user = await requireCapability("viewTutoring");
-  const parsed = createSchema.safeParse(input);
+  const user   = await requireCapability("viewTutoring");
+  const parsed = sessionSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 
   const db = createAdminClient() as any;
-
   const { error } = await db.from("tutoring_sessions").insert({
-    enrollment_id:    parsed.data.enrollment_id,
-    tutor_id:         user.id,
-    contact_type:     parsed.data.contact_type,
-    session_date:     parsed.data.session_date,
-    notes:            parsed.data.notes ?? null,
-    duration_minutes: parsed.data.duration_minutes ?? null,
+    enrollment_id: parsed.data.enrollment_id,
+    tutor_id:      user.id,
+    contact_type:  parsed.data.contact_type,
+    session_date:  parsed.data.session_date,
+    notes:         parsed.data.notes ?? null,
   });
 
   if (error) return { error: error.message };
+  revalidatePath("/tutoring");
+  revalidatePath("/enrollments", "layout");
+  return { success: true };
+}
 
+export async function updateTutoringSession(
+  id: string,
+  input: Omit<CreateSessionInput, "enrollment_id">,
+): Promise<ActionResult> {
+  await requireCapability("viewTutoring");
+  const parsed = sessionSchema.omit({ enrollment_id: true }).safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  const db = createAdminClient() as any;
+  const { error } = await db.from("tutoring_sessions").update({
+    contact_type: parsed.data.contact_type,
+    session_date: parsed.data.session_date,
+    notes:        parsed.data.notes ?? null,
+  }).eq("id", id);
+
+  if (error) return { error: error.message };
   revalidatePath("/tutoring");
   revalidatePath("/enrollments", "layout");
   return { success: true };
@@ -54,8 +73,6 @@ export async function deleteTutoringSession(id: string): Promise<ActionResult> {
   if (error) return { error: error.message };
 
   revalidatePath("/tutoring");
-  if (existing?.enrollment_id) {
-    revalidatePath(`/enrollments/${existing.enrollment_id}`);
-  }
+  if (existing?.enrollment_id) revalidatePath(`/enrollments/${existing.enrollment_id}`);
   return { success: true };
 }
