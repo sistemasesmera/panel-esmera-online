@@ -14,6 +14,16 @@ const STATUS_OPTIONS = [
 
 const STATUS_MAP = Object.fromEntries(STATUS_OPTIONS.map(s => [s.value, s]));
 
+function expiryRowCls(endDate: string | null): string {
+  if (!endDate) return "hover:bg-slate-50/70";
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const days = Math.floor((new Date(endDate).getTime() - today.getTime()) / 86_400_000);
+  if (days < 0)  return "bg-slate-100 hover:bg-slate-200/60";
+  if (days < 7)  return "bg-red-50 hover:bg-red-100/60";
+  if (days < 30) return "bg-amber-50 hover:bg-amber-100/60";
+  return "hover:bg-slate-50/70";
+}
+
 type Enrollment = {
   id: string;
   enrollment_number: number;
@@ -162,7 +172,7 @@ export function EnrollmentsTable({ enrollments }: { enrollments: Enrollment[] })
               {filtered.map((e) => {
                 const s = STATUS_MAP[e.status] ?? { label: e.status, cls: "bg-slate-100 text-slate-500 ring-1 ring-slate-200/60" };
                 return (
-                  <tr key={e.id} className="hover:bg-slate-50/70 transition-colors group">
+                  <tr key={e.id} className={cn("transition-colors group", expiryRowCls(e.end_date))}>
                     <td className="px-5 py-3.5">
                       <Link href={`/enrollments/${e.id}`} className="font-mono text-xs font-bold text-slate-400 hover:text-indigo-600 transition-colors">
                         #{e.enrollment_number}
