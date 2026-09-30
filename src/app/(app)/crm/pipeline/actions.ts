@@ -4,6 +4,7 @@ import { requireCapability } from "@/lib/auth/require-role";
 import { requireAuth } from "@/lib/auth/require-role";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { updateGhlOpportunity, createGhlContact, createGhlOpportunity } from "@/lib/ghl/api";
+import { normalizePhone } from "@/lib/utils/phone";
 import type { NoteType } from "@/lib/data/lead-notes.repository";
 import { LOST_REASONS, type LostReason, UNQUALIFIED_REASONS, type UnqualifiedReason } from "@/lib/domain/crm/lead-status";
 
@@ -433,17 +434,23 @@ export async function createLead(
   name:            string,
   email:           string | null,
   phone:           string | null,
-  courseId:        string | null,
+  courseName:      string | null,
 ): Promise<{ success: true; contactId: string; oppId: string } | { error: string }> {
   await requireCapability("viewPipeline");
 
   if (!name.trim()) return { error: "El nombre es obligatorio" };
 
+  // Normalize phone — only send if it resolves to E.164 (+...)
+  const normalizedPhone = phone?.trim() ? normalizePhone(phone.trim()) : null;
+  const validPhone = normalizedPhone?.startsWith("+") ? normalizedPhone : undefined;
+
+  const cursoFieldId = process.env.GHL_CURSO_FIELD_ID ?? null;
+
   try {
     const contact = await createGhlContact({
       name:  name.trim(),
       email: email?.trim() || undefined,
-      phone: phone?.trim() || undefined,
+      phone: validPhone,
     });
 
     const opp = await createGhlOpportunity({
@@ -451,16 +458,10 @@ export async function createLead(
       pipelineStageId: firstStageId,
       contactId:       contact.id,
       name:            name.trim(),
+      customFields: (cursoFieldId && courseName?.trim())
+        ? [{ id: cursoFieldId, field_value: courseName.trim() }]
+        : undefined,
     });
-
-    // Store lead profile with course interest if provided
-    if (courseId) {
-      const db = createAdminClient() as any;
-      await db.from("lead_profiles").upsert(
-        { ghl_contact_id: contact.id, ghl_opportunity_id: opp.id, curso_interes_id: courseId },
-        { onConflict: "ghl_contact_id" }
-      ).then(() => {}, () => {});
-    }
 
     return { success: true, contactId: contact.id, oppId: opp.id };
   } catch (err: any) {

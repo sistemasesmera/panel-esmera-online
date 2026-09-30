@@ -1,12 +1,10 @@
 "use client";
 
-import { useState, useTransition, useEffect } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { X, UserPlus, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { createLead } from "@/app/(app)/crm/pipeline/actions";
-
-type Course = { id: string; name: string };
 
 export function NewLeadModal({
   pipelineId,
@@ -20,19 +18,11 @@ export function NewLeadModal({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
-  const [name,     setName]     = useState("");
-  const [email,    setEmail]    = useState("");
-  const [phone,    setPhone]    = useState("");
-  const [courseId, setCourseId] = useState("");
-  const [courses,  setCourses]  = useState<Course[]>([]);
-  const [done,     setDone]     = useState(false);
-
-  useEffect(() => {
-    fetch("/api/courses")
-      .then(r => r.json())
-      .then(d => Array.isArray(d) && setCourses(d))
-      .catch(() => {});
-  }, []);
+  const [name,       setName]       = useState("");
+  const [email,      setEmail]      = useState("");
+  const [phone,      setPhone]      = useState("");
+  const [courseName, setCourseName] = useState("");
+  const [done,       setDone]       = useState(false);
 
   function handleSubmit() {
     if (!name.trim()) { toast.error("El nombre es obligatorio"); return; }
@@ -44,7 +34,7 @@ export function NewLeadModal({
         name.trim(),
         email.trim() || null,
         phone.trim() || null,
-        courseId || null,
+        courseName.trim() || null,
       );
       if ("error" in res) { toast.error(res.error); return; }
       setDone(true);
@@ -135,10 +125,13 @@ export function NewLeadModal({
 
           <div>
             <label className={labelCls}>Curso de interés</label>
-            <select value={courseId} onChange={e => setCourseId(e.target.value)} className={inputCls}>
-              <option value="">Sin especificar</option>
-              {courses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
+            <input
+              type="text"
+              value={courseName}
+              onChange={e => setCourseName(e.target.value)}
+              placeholder="Ej. Marketing digital"
+              className={inputCls}
+            />
           </div>
         </div>
 

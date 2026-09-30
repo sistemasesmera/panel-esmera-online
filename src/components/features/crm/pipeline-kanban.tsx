@@ -1,9 +1,10 @@
 "use client";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { LayoutGrid, List, ArrowRight, GraduationCap, Mail, Clock, CalendarPlus, Flame, Thermometer, Snowflake } from "lucide-react";
+import { LayoutGrid, List, ArrowRight, GraduationCap, Mail, Clock, CalendarPlus, Flame, Thermometer, Snowflake, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { LeadSheet } from "./lead-sheet";
+import { NewLeadModal } from "./new-lead-modal";
 import { cn, fmt } from "@/lib/utils";
 import { moveOppToStage } from "@/app/(app)/crm/pipeline/actions";
 import type { GhlPipeline, GhlPipelineStage, OppEnriched } from "@/lib/data/ghl-pipeline.repository";
@@ -393,6 +394,7 @@ export function PipelineKanban({ pipelines, oppsByPipeline }: Props) {
   const [view, setView]           = useState<"kanban" | "list">("kanban");
   const [zone, setZone]           = useState<"all" | "setter" | "closer">("all");
   const [sheetOpp, setSheetOpp]   = useState<OppEnriched | null>(null);
+  const [newLeadOpen, setNewLeadOpen] = useState(false);
 
   // ── Drag & drop state ──────────────────────────────────────────────────────
   const [dragId, setDragId]             = useState<string | null>(null);
@@ -502,6 +504,15 @@ export function PipelineKanban({ pipelines, oppsByPipeline }: Props) {
 
       {/* ── Top bar: KPIs + toolbar ── */}
       <div className="flex items-center gap-4 flex-wrap">
+
+        {/* Nuevo lead */}
+        <button
+          onClick={() => setNewLeadOpen(true)}
+          className="cursor-pointer flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-700 transition-colors shadow-sm"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          Nuevo lead
+        </button>
 
         {/* Spacer */}
         <div className="flex-1" />
@@ -618,6 +629,17 @@ export function PipelineKanban({ pipelines, oppsByPipeline }: Props) {
           onAction={() => { setSheetOpp(null); router.refresh(); }}
         />
       )}
+
+      {newLeadOpen && pipeline && (() => {
+        const firstStage = pipeline.stages.find(s => getStageCfg(s.name).zone === "setter") ?? pipeline.stages[0];
+        return (
+          <NewLeadModal
+            pipelineId={pipeline.id}
+            firstStageId={firstStage.id}
+            onClose={() => setNewLeadOpen(false)}
+          />
+        );
+      })()}
 
     </div>
   );

@@ -231,7 +231,18 @@ export async function createGhlContact(data: {
     headers: ghlHeaders(),
     body:    JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`GHL create contact error ${res.status}: ${await res.text()}`);
+
+  if (!res.ok) {
+    const errJson = await res.json().catch(() => null);
+    // Duplicate contact — reuse the existing one
+    const existingId = errJson?.meta?.contactId as string | undefined;
+    if (existingId) {
+      const existing = await fetchGhlContact(existingId);
+      if (existing) return existing;
+    }
+    throw new Error(`GHL create contact error ${res.status}: ${JSON.stringify(errJson)}`);
+  }
+
   const json = await res.json();
   return (json.contact ?? json) as GhlContact;
 }
@@ -242,6 +253,7 @@ export async function createGhlOpportunity(data: {
   contactId:       string;
   name:            string;
   monetaryValue?:  number;
+  customFields?:   Array<{ id: string; field_value: string }>;
 }): Promise<GhlOpportunity> {
   const locationId = process.env.GHL_LOCATION_ID;
   if (!locationId)              throw new Error("GHL_LOCATION_ID not set");
@@ -255,7 +267,8 @@ export async function createGhlOpportunity(data: {
     name:            data.name,
     status:          "open",
   };
-  if (data.monetaryValue) body.monetaryValue = data.monetaryValue;
+  if (data.monetaryValue)          body.monetaryValue = data.monetaryValue;
+  if (data.customFields?.length)   body.customFields  = data.customFields;
 
   const res = await fetch(`${GHL_API_BASE}/opportunities/`, {
     method:  "POST",
