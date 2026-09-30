@@ -14,8 +14,8 @@ export async function GET(req: NextRequest) {
     .select("id, full_name, role")
     .order("full_name", { ascending: true });
 
-  if (role) {
-    query = query.eq("role", role);
+  if (role === "setter" || role === "closer") {
+    query = query.in("role", [role, "administracion"]);
   } else {
     query = query.in("role", ["setter", "closer", "administracion"]);
   }
