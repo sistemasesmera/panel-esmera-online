@@ -209,6 +209,64 @@ export async function createGhlAppointment(opts: {
   return { id: data.id ?? data.event?.id ?? "" };
 }
 
+export async function createGhlContact(data: {
+  name:   string;
+  email?: string;
+  phone?: string;
+}): Promise<GhlContact> {
+  const locationId = process.env.GHL_LOCATION_ID;
+  if (!locationId)              throw new Error("GHL_LOCATION_ID not set");
+  if (!process.env.GHL_API_KEY) throw new Error("GHL_API_KEY not set");
+
+  const [firstName, ...rest] = data.name.trim().split(" ");
+  const lastName = rest.join(" ") || undefined;
+
+  const body: Record<string, unknown> = { locationId, firstName };
+  if (lastName)    body.lastName = lastName;
+  if (data.email)  body.email   = data.email;
+  if (data.phone)  body.phone   = data.phone;
+
+  const res = await fetch(`${GHL_API_BASE}/contacts/`, {
+    method:  "POST",
+    headers: ghlHeaders(),
+    body:    JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`GHL create contact error ${res.status}: ${await res.text()}`);
+  const json = await res.json();
+  return (json.contact ?? json) as GhlContact;
+}
+
+export async function createGhlOpportunity(data: {
+  pipelineId:      string;
+  pipelineStageId: string;
+  contactId:       string;
+  name:            string;
+  monetaryValue?:  number;
+}): Promise<GhlOpportunity> {
+  const locationId = process.env.GHL_LOCATION_ID;
+  if (!locationId)              throw new Error("GHL_LOCATION_ID not set");
+  if (!process.env.GHL_API_KEY) throw new Error("GHL_API_KEY not set");
+
+  const body: Record<string, unknown> = {
+    locationId,
+    pipelineId:      data.pipelineId,
+    pipelineStageId: data.pipelineStageId,
+    contactId:       data.contactId,
+    name:            data.name,
+    status:          "open",
+  };
+  if (data.monetaryValue) body.monetaryValue = data.monetaryValue;
+
+  const res = await fetch(`${GHL_API_BASE}/opportunities/`, {
+    method:  "POST",
+    headers: ghlHeaders(),
+    body:    JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`GHL create opportunity error ${res.status}: ${await res.text()}`);
+  const json = await res.json();
+  return (json.opportunity ?? json) as GhlOpportunity;
+}
+
 export async function fetchGhlUsers(): Promise<Array<{ id: string; name: string; email: string }>> {
   const locationId = process.env.GHL_LOCATION_ID;
   if (!locationId || !process.env.GHL_API_KEY) return [];

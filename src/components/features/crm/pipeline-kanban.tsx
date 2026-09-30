@@ -390,9 +390,9 @@ type Props = {
 export function PipelineKanban({ pipelines, oppsByPipeline }: Props) {
   const router = useRouter();
   const [activePipelineId, setActivePipelineId] = useState(pipelines[0]?.id ?? "");
-  const [view, setView]         = useState<"kanban" | "list">("kanban");
-  const [zone, setZone]         = useState<"all" | "setter" | "closer">("all");
-  const [sheetOpp, setSheetOpp] = useState<OppEnriched | null>(null);
+  const [view, setView]           = useState<"kanban" | "list">("kanban");
+  const [zone, setZone]           = useState<"all" | "setter" | "closer">("all");
+  const [sheetOpp, setSheetOpp]   = useState<OppEnriched | null>(null);
 
   // ── Drag & drop state ──────────────────────────────────────────────────────
   const [dragId, setDragId]             = useState<string | null>(null);
@@ -618,6 +618,7 @@ export function PipelineKanban({ pipelines, oppsByPipeline }: Props) {
           onAction={() => { setSheetOpp(null); router.refresh(); }}
         />
       )}
+
     </div>
   );
 }
