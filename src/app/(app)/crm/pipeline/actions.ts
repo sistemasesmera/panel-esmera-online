@@ -509,7 +509,7 @@ export async function updateLeadContactInfo(
       type:               "nota",
       content:            `✏️ Datos de contacto actualizados:\n${updates.join("\n")}`,
       created_by:         user.id,
-      created_by_name:    user.full_name ?? user.email ?? "Sistema",
+      created_by_name:    user.fullName ?? user.email ?? "Sistema",
     }).then(() => {}, () => {});
 
     return { success: true };
