@@ -1393,8 +1393,8 @@ export function LeadSheet({
           />
         )}
 
-        {/* ── Header ── */}
-        <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-slate-100 shrink-0">
+        {/* ── Header — fijo, siempre visible ── */}
+        <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-slate-100 shrink-0 bg-white sticky top-0 z-10">
           <div className="flex items-center gap-3 min-w-0">
             <div className="h-9 w-9 rounded-full bg-gradient-to-br from-indigo-400 to-indigo-600 flex items-center justify-center text-white text-xs font-black shrink-0">
               {contact.name.split(" ").slice(0, 2).map(n => n[0]).join("").toUpperCase()}
@@ -1411,10 +1411,13 @@ export function LeadSheet({
           </button>
         </div>
 
+        {/* ── Todo lo de abajo del header es scrollable ── */}
+        <div className="flex-1 overflow-y-auto">
+
         {/* ── Temperatura — banner prominente ── */}
         {profile.temperatura && (
           <div className={cn(
-            "px-5 py-3 shrink-0 flex items-center justify-between border-b",
+            "px-5 py-3 flex items-center justify-between border-b",
             profile.temperatura === "caliente" ? "bg-red-50 border-red-200" :
             profile.temperatura === "templada" ? "bg-amber-50 border-amber-200" :
                                                   "bg-sky-50 border-sky-200"
@@ -1469,7 +1472,7 @@ export function LeadSheet({
         )}
 
         {/* ── Contact info ── */}
-        <div className="px-5 py-3 border-b border-slate-100 shrink-0 space-y-1">
+        <div className="px-5 py-3 border-b border-slate-100 space-y-1">
           <div className="flex items-center justify-between mb-0.5">
             <div className="space-y-1 flex-1 min-w-0">
               {contact.email ? (
@@ -1524,7 +1527,7 @@ export function LeadSheet({
           const canEnroll     = !inProspection && missing.length === 0;
 
           return (
-            <div className="px-5 py-3 border-b border-slate-100 shrink-0 space-y-2">
+            <div className="px-5 py-3 border-b border-slate-100 space-y-2">
               <div className="flex gap-2 flex-wrap">
                 {/* Matricular */}
                 {existingEnrollment ? (
@@ -1639,7 +1642,7 @@ export function LeadSheet({
 
 
         {/* ── Nueva actividad ── */}
-        <div className="px-5 py-4 border-b border-slate-100 shrink-0">
+        <div className="px-5 py-4 border-b border-slate-100">
           <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-3">Nueva actividad</p>
           <div className="flex gap-1.5 flex-wrap mb-3">
             {NOTE_TYPES.map(t => {
@@ -1752,7 +1755,7 @@ export function LeadSheet({
         </div>
 
         {/* ── Actividad ── */}
-        <div className="flex-1 overflow-y-auto px-5 py-4">
+        <div className="px-5 py-4">
           <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-4">
             Actividad · {activity.length} registros
           </p>
@@ -1807,6 +1810,8 @@ export function LeadSheet({
             </div>
           )}
         </div>
+
+        </div>{/* end scrollable body */}
       </div>
     </>
   );
