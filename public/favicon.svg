@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#7ecec3"/>
+      <stop offset="100%" stop-color="#2e8b7a"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Top swoosh stroke -->
+  <path
+    d="M 14 26
+       C 14 14, 28 6, 50 6
+       C 70 6, 84 14, 84 22
+       C 84 28, 78 32, 68 32
+       L 22 32
+       C 18 32, 14 30, 14 26 Z"
+    fill="url(#grad)"
+    stroke="none"
+  />
+
+  <!-- Bottom stylized e -->
+  <path
+    d="M 22 44
+       C 10 44, 10 90, 28 90
+       L 72 90
+       C 82 90, 86 84, 86 78
+       C 86 72, 82 66, 72 66
+       L 30 66
+       C 26 66, 22 63, 22 58
+       C 22 53, 26 50, 30 50
+       L 72 50
+       C 76 50, 80 47, 80 43
+       C 80 39, 76 44, 22 44 Z"
+    fill="url(#grad)"
+    stroke="none"
+  />
+</svg>

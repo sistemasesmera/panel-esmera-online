@@ -1,0 +1,223 @@
+import "server-only";
+
+const GHL_API_BASE = "https://services.leadconnectorhq.com";
+
+function ghlHeaders() {
+  return {
+    Authorization: `Bearer ${process.env.GHL_API_KEY}`,
+    "Content-Type": "application/json",
+    Version: "2021-04-15",
+  };
+}
+
+export type GhlPipelineStage = {
+  id: string;
+  name: string;
+  position: number;
+};
+
+export type GhlPipeline = {
+  id: string;
+  name: string;
+  stages: GhlPipelineStage[];
+};
+
+export type GhlOpportunity = {
+  id: string;
+  name: string;
+  pipelineId: string;
+  pipelineStageId: string;
+  pipelineStageName?: string;
+  status: "open" | "won" | "lost" | "abandoned";
+  monetaryValue: number | null;
+  assignedTo: string | null;
+  contact: {
+    id: string;
+    name: string;
+    email: string | null;
+    phone: string | null;
+  };
+  customFields?: Array<{ id: string; fieldValueString?: string; type?: string }>;
+  createdAt: string;
+  updatedAt: string;
+  lastStageChangeAt?: string | null;
+};
+
+export type GhlContact = {
+  id: string;
+  firstName: string | null;
+  lastName: string | null;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  customFields?: Array<{ id: string; value: string; fieldKey?: string }>;
+};
+
+export async function fetchGhlPipelines(): Promise<GhlPipeline[]> {
+  const locationId = process.env.GHL_LOCATION_ID;
+  if (!locationId) throw new Error("GHL_LOCATION_ID not set");
+  if (!process.env.GHL_API_KEY) throw new Error("GHL_API_KEY not set");
+
+  const url = new URL(`${GHL_API_BASE}/opportunities/pipelines`);
+  url.searchParams.set("locationId", locationId);
+
+  const res = await fetch(url.toString(), { headers: ghlHeaders(), cache: "no-store" });
+  if (!res.ok) throw new Error(`GHL pipelines error ${res.status}: ${await res.text()}`);
+  const data = await res.json();
+  return (data.pipelines ?? []) as GhlPipeline[];
+}
+
+export async function fetchGhlOpportunities(pipelineId: string): Promise<GhlOpportunity[]> {
+  const locationId = process.env.GHL_LOCATION_ID;
+  if (!locationId) throw new Error("GHL_LOCATION_ID not set");
+  if (!process.env.GHL_API_KEY) throw new Error("GHL_API_KEY not set");
+
+  const all: GhlOpportunity[] = [];
+  let startAfterId: string | undefined;
+
+  do {
+    const url = new URL(`${GHL_API_BASE}/opportunities/search`);
+    url.searchParams.set("location_id", locationId);
+    url.searchParams.set("pipeline_id", pipelineId);
+    url.searchParams.set("limit", "100");
+    if (startAfterId) url.searchParams.set("startAfterId", startAfterId);
+
+    const res = await fetch(url.toString(), { headers: ghlHeaders(), cache: "no-store" });
+    if (!res.ok) throw new Error(`GHL opportunities error ${res.status}: ${await res.text()}`);
+    const data = await res.json();
+    // Cast as any first to preserve raw customFields (including fieldValueString)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const page = (data.opportunities ?? []) as any[] as GhlOpportunity[];
+    all.push(...page);
+    startAfterId = data.meta?.startAfterId ?? undefined;
+    if (page.length < 100) break;
+  } while (startAfterId);
+
+  return all;
+}
+
+export async function fetchGhlOpportunity(id: string): Promise<GhlOpportunity | null> {
+  if (!process.env.GHL_API_KEY) return null;
+  const res = await fetch(`${GHL_API_BASE}/opportunities/${id}`, {
+    headers: ghlHeaders(),
+    cache: "no-store",
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  return (data.opportunity ?? data) as GhlOpportunity;
+}
+
+export async function updateGhlOpportunity(
+  id: string,
+  data: { pipelineStageId?: string; status?: string; monetaryValue?: number }
+): Promise<void> {
+  if (!process.env.GHL_API_KEY) throw new Error("GHL_API_KEY not set");
+  const res = await fetch(`${GHL_API_BASE}/opportunities/${id}`, {
+    method: "PUT",
+    headers: ghlHeaders(),
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error(`GHL update opportunity error ${res.status}: ${await res.text()}`);
+}
+
+export async function fetchGhlContact(contactId: string): Promise<GhlContact | null> {
+  if (!process.env.GHL_API_KEY) return null;
+  const res = await fetch(`${GHL_API_BASE}/contacts/${contactId}`, {
+    headers: ghlHeaders(),
+    cache: "no-store",
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  return (data.contact ?? data) as GhlContact;
+}
+
+
+
+export type GhlNote = {
+  id: string;
+  body: string;
+  dateAdded: string;
+  userId: string | null;
+};
+
+export async function fetchGhlContactNotes(contactId: string): Promise<GhlNote[]> {
+  if (!process.env.GHL_API_KEY) return [];
+  const url = new URL(`${GHL_API_BASE}/contacts/${contactId}/notes`);
+  const res = await fetch(url.toString(), { headers: ghlHeaders(), cache: "no-store" });
+  if (!res.ok) return [];
+  const data = await res.json();
+  return (data.notes ?? []) as GhlNote[];
+}
+
+export async function searchGhlOpportunitiesByPhone(phone: string): Promise<GhlOpportunity[]> {
+  const locationId = process.env.GHL_LOCATION_ID;
+  if (!locationId || !process.env.GHL_API_KEY) return [];
+
+  const url = new URL(`${GHL_API_BASE}/opportunities/search`);
+  url.searchParams.set("location_id", locationId);
+  url.searchParams.set("q", phone);
+  url.searchParams.set("limit", "20");
+
+  const res = await fetch(url.toString(), { headers: ghlHeaders(), cache: "no-store" });
+  if (!res.ok) return [];
+  const data = await res.json();
+  return (data.opportunities ?? []) as GhlOpportunity[];
+}
+
+// GHL service calendars expect local datetime strings (no Z suffix) + selectedTimezone
+function toLocalDateTimeString(date: Date, tz = "Europe/Madrid"): string {
+  return date.toLocaleString("sv-SE", { timeZone: tz }).replace(" ", "T");
+}
+
+export async function createGhlAppointment(opts: {
+  contactId: string;
+  title:     string;
+  startTime: string; // ISO 8601 UTC from client
+  endTime:   string; // ISO 8601 UTC from client
+  notes?:    string;
+}): Promise<{ id: string }> {
+  const locationId  = process.env.GHL_LOCATION_ID;
+  const calendarId  = process.env.GHL_CALENDAR_ID;
+  if (!locationId)  throw new Error("GHL_LOCATION_ID not set");
+  if (!calendarId)  throw new Error("GHL_CALENDAR_ID not set");
+  if (!process.env.GHL_API_KEY) throw new Error("GHL_API_KEY not set");
+
+  const startLocal = toLocalDateTimeString(new Date(opts.startTime));
+  const endLocal   = toLocalDateTimeString(new Date(opts.endTime));
+
+  const body: Record<string, unknown> = {
+    calendarId,
+    locationId,
+    contactId:         opts.contactId,
+    title:             opts.title,
+    startTime:         startLocal,
+    endTime:           endLocal,
+    selectedTimezone:  "Europe/Madrid",
+    appointmentStatus: "new",
+    ignoreDateRange:   true,
+    toNotify:          false,
+  };
+  if (opts.notes) body.notes = opts.notes;
+
+  const res = await fetch(`${GHL_API_BASE}/calendars/events/appointments`, {
+    method:  "POST",
+    headers: ghlHeaders(),
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`GHL appointment error ${res.status}: ${await res.text()}`);
+  const data = await res.json();
+  return { id: data.id ?? data.event?.id ?? "" };
+}
+
+export async function fetchGhlUsers(): Promise<Array<{ id: string; name: string; email: string }>> {
+  const locationId = process.env.GHL_LOCATION_ID;
+  if (!locationId || !process.env.GHL_API_KEY) return [];
+
+  const url = new URL(`${GHL_API_BASE}/users`);
+  url.searchParams.set("locationId", locationId);
+
+  const res = await fetch(url.toString(), { headers: ghlHeaders(), cache: "no-store" });
+  if (!res.ok) return [];
+  const data = await res.json();
+  return (data.users ?? []) as Array<{ id: string; name: string; email: string }>;
+}
