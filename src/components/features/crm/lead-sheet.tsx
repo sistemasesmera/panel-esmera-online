@@ -779,7 +779,7 @@ function CitaModal({
   const [localErr,      setLocalErr]      = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/team").then(r => r.ok ? r.json() : []).then(setTeam).catch(() => {});
+    fetch("/api/team?role=closer").then(r => r.ok ? r.json() : []).then(setTeam).catch(() => {});
   }, []);
 
   function handleConfirm() {

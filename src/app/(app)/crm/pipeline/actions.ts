@@ -305,14 +305,43 @@ export async function scheduleAppointment(
     } catch { /* non-blocking */ }
   }
 
-  // 3. Activity log
+  // 3. Auto-assign closer from the appointment's comercial
+  if (comercialId) {
+    const { data: prevProfile } = await db
+      .from("lead_profiles")
+      .select("closer_name")
+      .eq("ghl_contact_id", contactId)
+      .maybeSingle();
+
+    const prevCloser: string | null = prevProfile?.closer_name ?? null;
+
+    await db.from("lead_profiles").upsert(
+      { ghl_contact_id: contactId, closer_id: comercialId, closer_name: comercialName },
+      { onConflict: "ghl_contact_id" },
+    ).then(() => {}, () => {});
+
+    const closerNote = prevCloser && prevCloser !== comercialName
+      ? `👤 Closer cambiado: ${prevCloser} → ${comercialName} (al agendar cita)`
+      : `👤 Closer asignado: ${comercialName} (al agendar cita)`;
+
+    await db.from("lead_notes").insert({
+      ghl_contact_id:     contactId,
+      ghl_opportunity_id: oppId,
+      type:               "nota",
+      content:            closerNote,
+      created_by:         user.id,
+      created_by_name:    user.fullName ?? user.email ?? "Sistema",
+    }).then(() => {}, () => {});
+  }
+
+  // 4. Activity log
   const label = startDate.toLocaleString("es-ES", {
     weekday: "long", day: "2-digit", month: "long", year: "numeric",
     hour: "2-digit", minute: "2-digit",
     timeZone: "Europe/Madrid",
   });
   const lines = [`📅 Cita agendada · ${label}`];
-  if (comercialName) lines.push(`Comercial: ${comercialName}`);
+  if (comercialName) lines.push(`Closer: ${comercialName}`);
   if (notes)         lines.push(notes);
 
   await db.from("lead_notes").insert({
