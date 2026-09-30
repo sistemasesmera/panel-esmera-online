@@ -1296,7 +1296,7 @@ export function LeadSheet({
     <>
       <div className="fixed inset-0 z-40 bg-black/30 backdrop-blur-[2px]" onClick={onClose} />
 
-      <div className="fixed inset-y-0 right-0 z-50 flex flex-col w-full max-w-[680px] bg-white shadow-2xl animate-slide-in-right" style={{ isolation: "isolate" }}>
+      <div className="fixed inset-y-0 right-0 z-50 flex flex-col w-full max-w-[50vw] min-w-[340px] bg-white shadow-2xl animate-slide-in-right" style={{ isolation: "isolate" }}>
 
         {/* ── Modals (fixed z-[60], above the sheet) ── */}
         {(modal === "lost" || modal === "unqualified") && (
