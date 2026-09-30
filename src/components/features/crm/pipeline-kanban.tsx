@@ -386,9 +386,10 @@ function ListView({ opps, onOpen }: { opps: OppEnriched[]; onOpen: (opp: OppEnri
 type Props = {
   pipelines:      GhlPipeline[];
   oppsByPipeline: Record<string, OppEnriched[]>;
+  currentUser:    { id: string; role: string };
 };
 
-export function PipelineKanban({ pipelines, oppsByPipeline }: Props) {
+export function PipelineKanban({ pipelines, oppsByPipeline, currentUser }: Props) {
   const router = useRouter();
   const [activePipelineId, setActivePipelineId] = useState(pipelines[0]?.id ?? "");
   const [view, setView]           = useState<"kanban" | "list">("kanban");
@@ -625,6 +626,7 @@ export function PipelineKanban({ pipelines, oppsByPipeline }: Props) {
         <LeadSheet
           opp={sheetOpp}
           stages={pipeline?.stages ?? []}
+          currentUser={currentUser}
           onClose={() => setSheetOpp(null)}
           onAction={() => { setSheetOpp(null); router.refresh(); }}
         />

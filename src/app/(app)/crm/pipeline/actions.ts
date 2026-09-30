@@ -436,7 +436,7 @@ export async function createLead(
   phone:           string | null,
   courseName:      string | null,
 ): Promise<{ success: true; contactId: string; oppId: string } | { error: string }> {
-  await requireCapability("viewPipeline");
+  const user = await requireCapability("viewPipeline");
 
   if (!name.trim()) return { error: "El nombre es obligatorio" };
 
@@ -467,10 +467,54 @@ export async function createLead(
       })(),
     });
 
+    // Auto-assign current user as setter
+    const db2 = createAdminClient() as any;
+    await db2.from("lead_profiles").upsert({
+      ghl_contact_id:     contact.id,
+      ghl_opportunity_id: opp.id,
+      setter_id:          user.id,
+      setter_name:        user.fullName ?? user.email ?? "Sistema",
+    }, { onConflict: "ghl_contact_id" }).then(() => {}, () => {});
+
     return { success: true, contactId: contact.id, oppId: opp.id };
   } catch (err: any) {
     return { error: err.message ?? "Error al crear el lead" };
   }
+}
+
+export async function assignLeadMember(
+  contactId:  string,
+  oppId:      string,
+  role:       "setter" | "closer",
+  memberId:   string,
+  memberName: string,
+): Promise<{ success: true } | { error: string }> {
+  await requireCapability("viewPipeline");
+
+  const db = createAdminClient() as any;
+  const field = role === "setter"
+    ? { setter_id: memberId, setter_name: memberName }
+    : { closer_id: memberId, closer_name: memberName };
+
+  const { error } = await db.from("lead_profiles").upsert(
+    { ghl_contact_id: contactId, ghl_opportunity_id: oppId, ...field },
+    { onConflict: "ghl_contact_id" },
+  );
+  if (error) return { error: error.message };
+
+  // Log in activity
+  const user = await requireAuth();
+  const roleLabel = role === "setter" ? "Setter" : "Closer";
+  await db.from("lead_notes").insert({
+    ghl_contact_id:     contactId,
+    ghl_opportunity_id: oppId,
+    type:               "nota",
+    content:            `👤 ${roleLabel} asignado: ${memberName}`,
+    created_by:         user.id,
+    created_by_name:    user.fullName ?? user.email ?? "Sistema",
+  }).then(() => {}, () => {});
+
+  return { success: true };
 }
 
 export async function updateLeadContactInfo(

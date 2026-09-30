@@ -6,11 +6,11 @@ import { PipelineKanban } from "@/components/features/crm/pipeline-kanban";
 export const metadata: Metadata = { title: "Pipeline" };
 
 export default async function PipelinePage() {
-  await requireCapability("viewPipeline");
+  const currentUser = await requireCapability("viewPipeline");
 
   let data;
   try {
-    data = await fetchPipelineData();
+    data = await fetchPipelineData({ id: currentUser.id, role: currentUser.role });
   } catch {
     return (
       <div>
@@ -33,6 +33,7 @@ export default async function PipelinePage() {
       <PipelineKanban
         pipelines={data.pipelines}
         oppsByPipeline={data.oppsByPipeline}
+        currentUser={{ id: currentUser.id, role: currentUser.role }}
       />
     </div>
   );

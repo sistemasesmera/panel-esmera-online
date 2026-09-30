@@ -18,6 +18,7 @@ import {
   scheduleAppointment,
   updateCitaStatus as _updateCitaStatus,
   updateLeadContactInfo,
+  assignLeadMember,
 } from "@/app/(app)/crm/pipeline/actions";
 import {
   LOST_REASONS, type LostReason,
@@ -901,6 +902,89 @@ function CitaModal({
   );
 }
 
+// ── AssignMemberModal ─────────────────────────────────────────────────────────
+function AssignMemberModal({
+  role, onSave, onCancel, pending, error,
+}: {
+  role:     "setter" | "closer";
+  onSave:   (id: string, name: string) => void;
+  onCancel: () => void;
+  pending:  boolean;
+  error:    string | null;
+}) {
+  const [members,    setMembers]    = useState<TeamMember[]>([]);
+  const [selectedId, setSelectedId] = useState("");
+
+  useEffect(() => {
+    fetch(`/api/team?role=${role}`)
+      .then(r => r.ok ? r.json() : [])
+      .then(setMembers)
+      .catch(() => {});
+  }, [role]);
+
+  const selected = members.find(m => m.id === selectedId);
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-[2px] p-6">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm animate-slide-up">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+          <div className="flex items-center gap-2">
+            <div className="h-7 w-7 rounded-lg bg-indigo-100 flex items-center justify-center">
+              <User className="h-3.5 w-3.5 text-indigo-600" />
+            </div>
+            <p className="text-sm font-black text-slate-900">
+              Asignar {role === "setter" ? "setter" : "closer"}
+            </p>
+          </div>
+          <button onClick={onCancel} className="cursor-pointer p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="px-5 py-4 space-y-2">
+          {members.length === 0 ? (
+            <p className="text-xs text-slate-400 text-center py-4">Cargando…</p>
+          ) : (
+            members.map(m => (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => setSelectedId(m.id)}
+                className={cn(
+                  "cursor-pointer w-full text-left text-sm font-medium px-4 py-3 rounded-xl border transition-all flex items-center gap-3",
+                  selectedId === m.id
+                    ? "bg-indigo-50 border-indigo-300 text-indigo-800 font-semibold"
+                    : "border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                )}
+              >
+                <div className="h-7 w-7 rounded-full bg-gradient-to-br from-indigo-400 to-indigo-600 flex items-center justify-center text-white text-[10px] font-black shrink-0">
+                  {(m.full_name ?? "?").split(" ").slice(0, 2).map(n => n[0]).join("").toUpperCase()}
+                </div>
+                {m.full_name ?? m.id}
+              </button>
+            ))
+          )}
+          {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
+        </div>
+
+        <div className="flex gap-3 px-5 pb-5">
+          <button onClick={onCancel} className="cursor-pointer flex-1 text-sm font-semibold px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors">
+            Cancelar
+          </button>
+          <button
+            onClick={() => selected && onSave(selected.id, selected.full_name ?? selected.id)}
+            disabled={pending || !selectedId}
+            className="cursor-pointer flex-1 flex items-center justify-center gap-2 text-sm font-semibold px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50 transition-colors"
+          >
+            {pending && <Loader2 className="h-4 w-4 animate-spin" />}
+            Asignar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── EditContactModal ──────────────────────────────────────────────────────────
 function EditContactModal({
   initial, onSave, onCancel, pending, error,
@@ -968,7 +1052,7 @@ function EditContactModal({
 }
 
 // ── LeadSheet ─────────────────────────────────────────────────────────────────
-type ModalMode = "lost" | "unqualified" | "contract" | "ficha" | "enrollment" | "cita" | "simulate" | "editContact";
+type ModalMode = "lost" | "unqualified" | "contract" | "ficha" | "enrollment" | "cita" | "simulate" | "editContact" | "assignSetter" | "assignCloser";
 
 function findStageId(stages: GhlPipelineStage[], keyword: string): string | undefined {
   const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
@@ -1002,12 +1086,13 @@ function getEnrollmentErrors(opp: OppEnriched, profile: Partial<LeadProfile>): s
 }
 
 export function LeadSheet({
-  opp, onClose, onAction, stages = [],
+  opp, onClose, onAction, stages = [], currentUser,
 }: {
-  opp:       OppEnriched;
-  onClose:   () => void;
-  onAction?: () => void;
-  stages?:   GhlPipelineStage[];
+  opp:         OppEnriched;
+  onClose:     () => void;
+  onAction?:  () => void;
+  stages?:     GhlPipelineStage[];
+  currentUser: { id: string; role: string };
 }) {
   const lostStageId        = findStageId(stages, "perdido");
   const unqualifiedStageId = findStageId(stages, "cualificado");
@@ -1048,6 +1133,14 @@ export function LeadSheet({
   // Local override so edits are reflected immediately without waiting for a parent refresh
   const [contactOverride, setContactOverride] = useState<{ name: string; email: string | null; phone: string | null } | null>(null);
   const contact = contactOverride ?? opp.contact;
+
+  // Assignment state (local optimistic update)
+  const [assignErr,     setAssignErr]     = useState<string | null>(null);
+  const [assignPending, startAssign]      = useTransition();
+  const [setterOverride, setSetterOverride] = useState<{ id: string; name: string } | null | undefined>(undefined);
+  const [closerOverride, setCloserOverride] = useState<{ id: string; name: string } | null | undefined>(undefined);
+  const setterName = setterOverride !== undefined ? setterOverride?.name : (opp.setter_name ?? null);
+  const closerName = closerOverride !== undefined ? closerOverride?.name : (opp.closer_name ?? null);
 
   // ── Fetchers ──
   const fetchActivity = useCallback(async () => {
@@ -1187,6 +1280,19 @@ export function LeadSheet({
       toast.success("Datos actualizados");
       setActLoading(true);
       await fetchActivity();
+      onAction?.();
+    });
+  }
+
+  function handleAssignMember(role: "setter" | "closer", memberId: string, memberName: string) {
+    setAssignErr(null);
+    startAssign(async () => {
+      const res = await assignLeadMember(opp.contact.id, opp.id, role, memberId, memberName);
+      if ("error" in res) { setAssignErr(res.error); return; }
+      if (role === "setter") setSetterOverride({ id: memberId, name: memberName });
+      else                   setCloserOverride({ id: memberId, name: memberName });
+      setModal(null);
+      toast.success(`${role === "setter" ? "Setter" : "Closer"} asignado: ${memberName}`);
       onAction?.();
     });
   }
@@ -1359,6 +1465,15 @@ export function LeadSheet({
             onCancel={() => { setModal(null); setEditContactErr(null); }}
           />
         )}
+        {(modal === "assignSetter" || modal === "assignCloser") && (
+          <AssignMemberModal
+            role={modal === "assignSetter" ? "setter" : "closer"}
+            pending={assignPending}
+            error={assignErr}
+            onSave={(id, name) => handleAssignMember(modal === "assignSetter" ? "setter" : "closer", id, name)}
+            onCancel={() => { setModal(null); setAssignErr(null); }}
+          />
+        )}
         {modal === "simulate" && (
           <EnrollmentModal
             opp={opp}
@@ -1502,6 +1617,46 @@ export function LeadSheet({
               Editar
             </button>
           </div>
+          {/* Setter / Closer assignment */}
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Setter:</span>
+              {setterName ? (
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-sky-50 text-sky-700 ring-1 ring-sky-200/60 rounded-full px-2.5 py-0.5">
+                  {setterName}
+                </span>
+              ) : (
+                <span className="text-[11px] text-slate-400 italic">Sin asignar</span>
+              )}
+              {currentUser.role === "administracion" && (
+                <button
+                  onClick={() => { setAssignErr(null); setModal("assignSetter"); }}
+                  className="cursor-pointer text-[10px] font-semibold px-2 py-0.5 rounded-full border border-slate-200 text-slate-400 hover:text-sky-600 hover:border-sky-300 hover:bg-sky-50 transition-colors"
+                >
+                  {setterName ? "Cambiar" : "Asignar"}
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Closer:</span>
+              {closerName ? (
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-violet-50 text-violet-700 ring-1 ring-violet-200/60 rounded-full px-2.5 py-0.5">
+                  {closerName}
+                </span>
+              ) : (
+                <span className="text-[11px] text-slate-400 italic">Sin asignar</span>
+              )}
+              {(currentUser.role === "setter" || currentUser.role === "administracion") && (
+                <button
+                  onClick={() => { setAssignErr(null); setModal("assignCloser"); }}
+                  className="cursor-pointer text-[10px] font-semibold px-2 py-0.5 rounded-full border border-slate-200 text-slate-400 hover:text-violet-600 hover:border-violet-300 hover:bg-violet-50 transition-colors"
+                >
+                  {closerName ? "Cambiar" : "Asignar"}
+                </button>
+              )}
+            </div>
+          </div>
+
           {profile.dni && (
             <div className="flex items-center gap-2 text-xs text-slate-500">
               <CreditCard className="h-3.5 w-3.5 text-slate-400 shrink-0" />
