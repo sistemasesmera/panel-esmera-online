@@ -43,7 +43,7 @@ export default async function EnrollmentDetailPage({
   ] = await Promise.all([
     db.from("enrollments").select(`
       id, enrollment_number, status, enrollment_date, start_date, end_date,
-      duration_months, notes, created_at,
+      duration_months, notes, created_at, setter_name, closer_name,
       students!student_id(id, full_name, email, phone, dni_nie, ghl_contact_id),
       courses!course_id(name, duration_hours),
       platforms!platform_id(id, name),
@@ -85,13 +85,9 @@ export default async function EnrollmentDetailPage({
 
   if (error || !raw) notFound();
 
-  // Fetch setter/closer from lead_profiles via student's ghl_contact_id
-  const ghlContactId = (raw as any)?.students?.ghl_contact_id ?? null;
-  const { data: leadProfile } = ghlContactId
-    ? await db.from("lead_profiles").select("setter_name, closer_name").eq("ghl_contact_id", ghlContactId).maybeSingle()
-    : { data: null };
-  const setterName: string | null = leadProfile?.setter_name ?? null;
-  const closerName: string | null = leadProfile?.closer_name ?? null;
+  // Setter/closer are snapshotted on the enrollment at creation — frozen, never changes
+  const setterName: string | null = (raw as any)?.setter_name ?? null;
+  const closerName: string | null = (raw as any)?.closer_name ?? null;
 
   type EnrollmentData = {
     id: string;
@@ -103,6 +99,8 @@ export default async function EnrollmentDetailPage({
     duration_months: number | null;
     notes: string | null;
     created_at: string;
+    setter_name: string | null;
+    closer_name: string | null;
     students: { id: string; full_name: string; email: string; phone: string | null; dni_nie: string | null; ghl_contact_id: string | null } | null;
     courses: { name: string; duration_hours: number | null } | null;
     platforms: { id: string; name: string } | null;

@@ -203,7 +203,14 @@ export async function generateEnrollment(
     studentId = (newStudent as { id: string }).id;
   }
 
-  // 2. Create enrollment (activa — money is already in)
+  // 2. Snapshot setter/closer at this moment from lead_profiles
+  const { data: lp } = await db
+    .from("lead_profiles")
+    .select("setter_name, closer_name")
+    .eq("ghl_contact_id", contactId)
+    .maybeSingle();
+
+  // 3. Create enrollment (activa — money is already in)
   const { data: enrollment, error: enrollErr } = await db
     .from("enrollments")
     .insert({
@@ -213,6 +220,8 @@ export async function generateEnrollment(
       origin:             "manual",
       ghl_opportunity_id: oppId,
       assigned_to:        user.id,
+      setter_name:        lp?.setter_name ?? null,
+      closer_name:        lp?.closer_name ?? null,
     })
     .select("id, enrollment_number")
     .single();

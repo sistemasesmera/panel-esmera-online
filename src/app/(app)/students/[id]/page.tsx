@@ -49,7 +49,7 @@ export default async function StudentDetailPage({
       .single(),
 
     db.from("enrollments")
-      .select("id, enrollment_number, status, enrollment_date, courses!course_id(name), platforms!platform_id(name)")
+      .select("id, enrollment_number, status, enrollment_date, setter_name, closer_name, courses!course_id(name), platforms!platform_id(name)")
       .eq("student_id", id)
       .is("deleted_at", null)
       .order("created_at", { ascending: false }),
@@ -62,18 +62,18 @@ export default async function StudentDetailPage({
 
   if (error || !student) notFound();
 
-  // Fetch setter/closer from lead_profiles
-  const { data: leadProfile } = student.ghl_contact_id
-    ? await db.from("lead_profiles").select("setter_name, closer_name").eq("ghl_contact_id", student.ghl_contact_id).maybeSingle()
-    : { data: null };
-  const setterName: string | null = leadProfile?.setter_name ?? null;
-  const closerName: string | null = leadProfile?.closer_name ?? null;
+  // Setter/closer come from the most recent enrollment snapshot (frozen at creation)
+  const latestEnrollment = (enrollmentsRaw ?? [])[0] ?? null;
+  const setterName: string | null = latestEnrollment?.setter_name ?? null;
+  const closerName: string | null = latestEnrollment?.closer_name ?? null;
 
   const enrollments = (enrollmentsRaw ?? []) as Array<{
     id: string;
     enrollment_number: number;
     status: string;
     enrollment_date: string;
+    setter_name: string | null;
+    closer_name: string | null;
     courses: { name: string } | null;
     platforms: { name: string } | null;
   }>;
@@ -163,6 +163,20 @@ export default async function StudentDetailPage({
                             {formatDate(e.enrollment_date)}
                             {e.platforms?.name && <> · {e.platforms.name}</>}
                           </p>
+                          {(e.setter_name || e.closer_name) && (
+                            <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+                              {e.setter_name && (
+                                <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold bg-sky-50 text-sky-700 ring-1 ring-sky-200/60 rounded-full px-1.5 py-0.5">
+                                  <span className="font-black text-sky-400">S</span>{e.setter_name.split(" ")[0]}
+                                </span>
+                              )}
+                              {e.closer_name && (
+                                <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold bg-violet-50 text-violet-700 ring-1 ring-violet-200/60 rounded-full px-1.5 py-0.5">
+                                  <span className="font-black text-violet-400">C</span>{e.closer_name.split(" ")[0]}
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </div>
                         <span className={cn("shrink-0 text-[11px] font-semibold px-2.5 py-1 rounded-full", s.cls)}>
                           {s.label}
