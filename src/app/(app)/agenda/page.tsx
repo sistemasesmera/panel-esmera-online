@@ -10,14 +10,19 @@ export default async function AgendaPage() {
 
   const isAdmin = user.role === "administracion";
 
-  const query = db
+  const citasQuery = db
     .from("citas")
     .select("*")
     .order("scheduled_at", { ascending: true });
 
-  if (!isAdmin) query.eq("comercial_id", user.id);
+  if (!isAdmin) citasQuery.eq("comercial_id", user.id);
 
-  const { data: citas = [] } = await query;
+  const [{ data: citas = [] }, { data: staff = [] }] = await Promise.all([
+    citasQuery,
+    isAdmin
+      ? db.from("users").select("id, full_name").in("role", ["setter", "closer", "administracion"]).order("full_name")
+      : Promise.resolve({ data: [] }),
+  ]);
 
   return (
     <div>
@@ -25,7 +30,7 @@ export default async function AgendaPage() {
         <h1 className="text-2xl font-black text-slate-900">Agenda</h1>
         <p className="text-sm text-slate-500 mt-0.5">Citas agendadas con leads</p>
       </div>
-      <AgendaClient citas={citas ?? []} isAdmin={isAdmin} />
+      <AgendaClient citas={citas ?? []} isAdmin={isAdmin} staff={staff ?? []} />
     </div>
   );
 }

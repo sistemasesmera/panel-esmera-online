@@ -444,7 +444,8 @@ export async function createLead(
   const normalizedPhone = phone?.trim() ? normalizePhone(phone.trim()) : null;
   const validPhone = normalizedPhone?.startsWith("+") ? normalizedPhone : undefined;
 
-  const cursoFieldId = process.env.GHL_CURSO_FIELD_ID ?? null;
+  const cursoFieldId  = process.env.GHL_CURSO_FIELD_ID        ?? null;
+  const origenFieldId = process.env.GHL_ORIGEN_LEAD_FIELD_ID ?? null;
 
   try {
     const contact = await createGhlContact({
@@ -458,9 +459,12 @@ export async function createLead(
       pipelineStageId: firstStageId,
       contactId:       contact.id,
       name:            name.trim(),
-      customFields: (cursoFieldId && courseName?.trim())
-        ? [{ id: cursoFieldId, field_value: courseName.trim() }]
-        : undefined,
+      customFields: (() => {
+        const fields: Array<{ id: string; field_value: string }> = [];
+        if (cursoFieldId && courseName?.trim()) fields.push({ id: cursoFieldId,  field_value: courseName.trim() });
+        if (origenFieldId)                      fields.push({ id: origenFieldId, field_value: "MANUAL" });
+        return fields.length ? fields : undefined;
+      })(),
     });
 
     return { success: true, contactId: contact.id, oppId: opp.id };
