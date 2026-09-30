@@ -468,12 +468,22 @@ export async function createLead(
     });
 
     // Auto-assign current user as setter
-    const db2 = createAdminClient() as any;
+    const db2      = createAdminClient() as any;
+    const setterName = user.fullName ?? user.email ?? "Sistema";
     await db2.from("lead_profiles").upsert({
       ghl_contact_id: contact.id,
       setter_id:      user.id,
-      setter_name:    user.fullName ?? user.email ?? "Sistema",
+      setter_name:    setterName,
     }, { onConflict: "ghl_contact_id" }).then(() => {}, () => {});
+
+    await db2.from("lead_notes").insert({
+      ghl_contact_id:     contact.id,
+      ghl_opportunity_id: opp.id,
+      type:               "nota",
+      content:            `👤 Setter asignado automáticamente: ${setterName}`,
+      created_by:         user.id,
+      created_by_name:    setterName,
+    }).then(() => {}, () => {});
 
     return { success: true, contactId: contact.id, oppId: opp.id };
   } catch (err: any) {
@@ -491,6 +501,18 @@ export async function assignLeadMember(
   await requireCapability("viewPipeline");
 
   const db = createAdminClient() as any;
+
+  // Fetch previous value to detect change vs. new assignment
+  const { data: prev } = await db
+    .from("lead_profiles")
+    .select("setter_name, closer_name")
+    .eq("ghl_contact_id", contactId)
+    .maybeSingle();
+
+  const prevName: string | null = role === "setter"
+    ? (prev?.setter_name ?? null)
+    : (prev?.closer_name ?? null);
+
   const field = role === "setter"
     ? { setter_id: memberId, setter_name: memberName }
     : { closer_id: memberId, closer_name: memberName };
@@ -501,16 +523,21 @@ export async function assignLeadMember(
   );
   if (error) return { error: error.message };
 
-  // Log in activity
-  const user = await requireAuth();
+  // Build trace message
+  const user      = await requireAuth();
   const roleLabel = role === "setter" ? "Setter" : "Closer";
+  const actor     = user.fullName ?? user.email ?? "Sistema";
+  const content   = prevName && prevName !== memberName
+    ? `👤 ${roleLabel} cambiado: ${prevName} → ${memberName} (por ${actor})`
+    : `👤 ${roleLabel} asignado: ${memberName} (por ${actor})`;
+
   await db.from("lead_notes").insert({
     ghl_contact_id:     contactId,
     ghl_opportunity_id: oppId,
     type:               "nota",
-    content:            `👤 ${roleLabel} asignado: ${memberName}`,
+    content,
     created_by:         user.id,
-    created_by_name:    user.fullName ?? user.email ?? "Sistema",
+    created_by_name:    actor,
   }).then(() => {}, () => {});
 
   return { success: true };
