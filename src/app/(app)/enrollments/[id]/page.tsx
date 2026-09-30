@@ -47,7 +47,7 @@ export default async function EnrollmentDetailPage({
       students!student_id(id, full_name, email, phone, dni_nie, ghl_contact_id),
       courses!course_id(name, duration_hours),
       platforms!platform_id(id, name),
-      assigned_tutor:users!assigned_to(id, full_name),
+      tutor:users!tutor_id(id, full_name),
       contracts!enrollment_id(
         id, status, amount, payment_type, sent_at, signed_at, declined_at,
         document_url, docuseal_signing_url
@@ -104,7 +104,7 @@ export default async function EnrollmentDetailPage({
     students: { id: string; full_name: string; email: string; phone: string | null; dni_nie: string | null; ghl_contact_id: string | null } | null;
     courses: { name: string; duration_hours: number | null } | null;
     platforms: { id: string; name: string } | null;
-    assigned_tutor: { id: string; full_name: string } | null;
+    tutor: { id: string; full_name: string } | null;
     contracts: Array<{
       id: string; status: "borrador" | "enviado" | "firmado"; amount: number;
       payment_type: string | null; sent_at: string | null; signed_at: string | null;
@@ -255,7 +255,7 @@ export default async function EnrollmentDetailPage({
           <EnrollmentInfoPanel
             enrollmentId={enrollment.id}
             platform={enrollment.platforms ?? null}
-            tutor={enrollment.assigned_tutor ?? null}
+            tutor={enrollment.tutor ?? null}
             startDate={enrollment.start_date}
             endDate={enrollment.end_date}
             durationMonths={enrollment.duration_months}

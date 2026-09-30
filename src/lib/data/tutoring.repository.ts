@@ -40,8 +40,10 @@ export async function getActiveEnrollmentsForTutor(userId?: string): Promise<Enr
   let query = db
     .from("enrollments")
     .select("id, students(full_name), courses(name)")
-    .eq("status", "activa");
-  if (userId) query = query.eq("assigned_to", userId);
+    .in("status", ["en_curso", "pendiente_firma"])
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false });
+  if (userId) query = query.eq("tutor_id", userId);
   const { data, error } = await query;
   if (error) throw new Error(error.message);
   return (data ?? []) as unknown as EnrollmentForTutoring[];

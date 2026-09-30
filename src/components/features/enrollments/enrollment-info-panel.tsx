@@ -39,7 +39,7 @@ export function EnrollmentInfoPanel({
 
   const [form, setForm] = useState({
     platform_id:     platform?.id     ?? "",
-    assigned_to:     tutor?.id        ?? "",
+    tutor_id:        tutor?.id        ?? "",
     start_date:      startDate?.slice(0, 10) ?? "",
     end_date:        endDate?.slice(0, 10)   ?? "",
     duration_months: durationMonths?.toString() ?? "",
@@ -54,7 +54,7 @@ export function EnrollmentInfoPanel({
     startTransition(async () => {
       const res = await updateEnrollmentInfo(enrollmentId, {
         platform_id:     form.platform_id     || null,
-        assigned_to:     form.assigned_to     || null,
+        tutor_id:        form.tutor_id        || null,
         start_date:      form.start_date      || null,
         end_date:        form.end_date        || null,
         duration_months: form.duration_months ? parseInt(form.duration_months) : null,
@@ -70,7 +70,7 @@ export function EnrollmentInfoPanel({
   function handleCancel() {
     setForm({
       platform_id:     platform?.id     ?? "",
-      assigned_to:     tutor?.id        ?? "",
+      tutor_id:        tutor?.id        ?? "",
       start_date:      startDate?.slice(0, 10) ?? "",
       end_date:        endDate?.slice(0, 10)   ?? "",
       duration_months: durationMonths?.toString() ?? "",
@@ -154,7 +154,7 @@ export function EnrollmentInfoPanel({
             </div>
             <div>
               <label className={cn(labelCls)}>Tutor asignado</label>
-              <select value={form.assigned_to} onChange={e => set("assigned_to", e.target.value)} className={inputCls}>
+              <select value={form.tutor_id} onChange={e => set("tutor_id", e.target.value)} className={inputCls}>
                 <option value="">Sin tutor</option>
                 {tutors.map(t => <option key={t.id} value={t.id}>{t.full_name}</option>)}
               </select>

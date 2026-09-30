@@ -12,7 +12,7 @@ export async function updateEnrollmentInfo(
   enrollmentId: string,
   data: {
     platform_id?:     string | null;
-    assigned_to?:     string | null;
+    tutor_id?:        string | null;
     start_date?:      string | null;
     end_date?:        string | null;
     duration_months?: number | null;
@@ -43,13 +43,13 @@ export async function updateEnrollmentInfo(
       );
     }
   }
-  if ("assigned_to" in data) {
-    if (!data.assigned_to) {
+  if ("tutor_id" in data) {
+    if (!data.tutor_id) {
       changes["Tutor"] = "Sin tutor";
     } else {
       lookups.push(
-        db.from("users").select("full_name").eq("id", data.assigned_to).single()
-          .then(({ data: u }: any) => { changes["Tutor"] = u?.full_name ?? data.assigned_to!; })
+        db.from("users").select("full_name").eq("id", data.tutor_id).single()
+          .then(({ data: u }: any) => { changes["Tutor"] = u?.full_name ?? data.tutor_id!; })
       );
     }
   }
