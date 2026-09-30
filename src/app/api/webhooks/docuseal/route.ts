@@ -31,6 +31,7 @@ type ContractRow = { id: string; enrollment_id: string | null };
 
 export async function POST(req: NextRequest) {
   const tag = "[webhook/docuseal]";
+  console.log(tag, "▶ POST received from", req.headers.get("user-agent"), "at", new Date().toISOString());
 
   let rawBody = "";
   try {
@@ -39,6 +40,7 @@ export async function POST(req: NextRequest) {
     console.error(tag, "Failed to read body:", err);
     return Response.json({ error: "bad_body" }, { status: 400 });
   }
+  console.log(tag, "Body length:", rawBody.length, "| First 200 chars:", rawBody.slice(0, 200));
 
   const secret = process.env.DOCUSEAL_WEBHOOK_SECRET;
   if (secret) {
