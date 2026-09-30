@@ -97,19 +97,13 @@ async function enrichOpps(
   // ── Filter by assignment based on role ────────────────────────────────────
   if (currentUser.role === "administracion") return enriched;
 
-  if (currentUser.role === "setter") {
-    return enriched.filter(o =>
-      o.setter_id === currentUser.id ||
-      // Also show unassigned leads so admin/setter can pick them up
-      (!o.setter_id && !o.closer_id)
-    );
-  }
-
-  if (currentUser.role === "closer") {
-    return enriched.filter(o => o.closer_id === currentUser.id);
-  }
-
-  return enriched;
+  // Any non-admin sees leads where they are setter OR closer (roles can overlap)
+  return enriched.filter(o =>
+    o.setter_id === currentUser.id ||
+    o.closer_id === currentUser.id ||
+    // Unassigned leads visible to setters so they can be picked up
+    (currentUser.role === "setter" && !o.setter_id && !o.closer_id)
+  );
 }
 
 export async function fetchPipelineData(currentUser: PipelineUser): Promise<PipelineData> {
