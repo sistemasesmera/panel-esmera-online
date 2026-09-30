@@ -43,7 +43,7 @@ export default async function StudentDetailPage({
     { data: courses },
   ] = await Promise.all([
     db.from("students")
-      .select("id, full_name, email, phone, dni_nie, province, postal_code, birth_date, created_at")
+      .select("id, full_name, email, phone, dni_nie, province, postal_code, birth_date, created_at, ghl_contact_id")
       .eq("id", id)
       .is("deleted_at", null)
       .single(),
@@ -61,6 +61,13 @@ export default async function StudentDetailPage({
   ]);
 
   if (error || !student) notFound();
+
+  // Fetch setter/closer from lead_profiles
+  const { data: leadProfile } = student.ghl_contact_id
+    ? await db.from("lead_profiles").select("setter_name, closer_name").eq("ghl_contact_id", student.ghl_contact_id).maybeSingle()
+    : { data: null };
+  const setterName: string | null = leadProfile?.setter_name ?? null;
+  const closerName: string | null = leadProfile?.closer_name ?? null;
 
   const enrollments = (enrollmentsRaw ?? []) as Array<{
     id: string;
@@ -172,7 +179,23 @@ export default async function StudentDetailPage({
 
         {/* RIGHT: student data */}
         <div className="bg-white rounded-xl border border-slate-200 card-shadow p-5 space-y-4">
-          <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">Datos del alumno</h2>
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">Datos del alumno</h2>
+            {(setterName || closerName) && (
+              <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                {setterName && (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-sky-50 text-sky-700 ring-1 ring-sky-200/60 rounded-full px-2.5 py-0.5">
+                    <span className="font-black text-sky-400">S</span>{setterName}
+                  </span>
+                )}
+                {closerName && (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-violet-50 text-violet-700 ring-1 ring-violet-200/60 rounded-full px-2.5 py-0.5">
+                    <span className="font-black text-violet-400">C</span>{closerName}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
 
           <div className="space-y-3">
             <DataRow icon={<Mail className="h-3.5 w-3.5 text-slate-400" />} label="Email">

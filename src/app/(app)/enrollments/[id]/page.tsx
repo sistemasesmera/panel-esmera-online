@@ -44,7 +44,7 @@ export default async function EnrollmentDetailPage({
     db.from("enrollments").select(`
       id, enrollment_number, status, enrollment_date, start_date, end_date,
       duration_months, notes, created_at,
-      students!student_id(id, full_name, email, phone, dni_nie),
+      students!student_id(id, full_name, email, phone, dni_nie, ghl_contact_id),
       courses!course_id(name, duration_hours),
       platforms!platform_id(id, name),
       assigned_tutor:users!assigned_to(id, full_name),
@@ -85,6 +85,14 @@ export default async function EnrollmentDetailPage({
 
   if (error || !raw) notFound();
 
+  // Fetch setter/closer from lead_profiles via student's ghl_contact_id
+  const ghlContactId = (raw as any)?.students?.ghl_contact_id ?? null;
+  const { data: leadProfile } = ghlContactId
+    ? await db.from("lead_profiles").select("setter_name, closer_name").eq("ghl_contact_id", ghlContactId).maybeSingle()
+    : { data: null };
+  const setterName: string | null = leadProfile?.setter_name ?? null;
+  const closerName: string | null = leadProfile?.closer_name ?? null;
+
   type EnrollmentData = {
     id: string;
     enrollment_number: number;
@@ -95,7 +103,7 @@ export default async function EnrollmentDetailPage({
     duration_months: number | null;
     notes: string | null;
     created_at: string;
-    students: { id: string; full_name: string; email: string; phone: string | null; dni_nie: string | null } | null;
+    students: { id: string; full_name: string; email: string; phone: string | null; dni_nie: string | null; ghl_contact_id: string | null } | null;
     courses: { name: string; duration_hours: number | null } | null;
     platforms: { id: string; name: string } | null;
     assigned_tutor: { id: string; full_name: string } | null;
@@ -189,9 +197,25 @@ export default async function EnrollmentDetailPage({
 
           {/* Student + course summary */}
           <div className="bg-white rounded-xl border border-slate-200 card-shadow p-5">
-            <div className="flex items-center gap-2 mb-4">
-              <User className="h-4 w-4 text-slate-400" />
-              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">Alumno</h2>
+            <div className="flex items-center justify-between gap-2 mb-4">
+              <div className="flex items-center gap-2">
+                <User className="h-4 w-4 text-slate-400" />
+                <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">Alumno</h2>
+              </div>
+              {(setterName || closerName) && (
+                <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                  {setterName && (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-sky-50 text-sky-700 ring-1 ring-sky-200/60 rounded-full px-2.5 py-0.5">
+                      <span className="font-black text-sky-400">S</span>{setterName}
+                    </span>
+                  )}
+                  {closerName && (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-violet-50 text-violet-700 ring-1 ring-violet-200/60 rounded-full px-2.5 py-0.5">
+                      <span className="font-black text-violet-400">C</span>{closerName}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3">
               <div>
