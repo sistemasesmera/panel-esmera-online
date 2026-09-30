@@ -3,6 +3,12 @@ import { NextRequest } from "next/server";
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+function addMonths(dateStr: string, months: number): string {
+  const d = new Date(dateStr);
+  d.setMonth(d.getMonth() + months);
+  return d.toISOString().slice(0, 10);
+}
+
 export async function GET() {
   return Response.json({ ok: true, route: "/api/webhooks/docuseal", status: "reachable" });
 }
@@ -99,10 +105,25 @@ export async function POST(req: NextRequest) {
     await db.from("contract_events")
       .insert({ contract_id: contractRaw.id, enrollment_id: contractRaw.enrollment_id, event_type: "signed", occurred_at: signedAt });
 
-    // Advance enrollment to "en_curso" automatically on signature
+    // Advance enrollment to "en_curso" and auto-calculate start/end dates
     if (contractRaw.enrollment_id) {
+      const { data: enr } = await db
+        .from("enrollments")
+        .select("duration_months, start_date")
+        .eq("id", contractRaw.enrollment_id)
+        .single();
+
+      const startDate = signedAt.slice(0, 10); // YYYY-MM-DD
+      const endDate   = enr?.duration_months
+        ? addMonths(startDate, enr.duration_months)
+        : null;
+
+      const enrollmentUpdate: Record<string, unknown> = { status: "en_curso", updated_at: signedAt };
+      if (!enr?.start_date)  enrollmentUpdate.start_date = startDate;
+      if (endDate)           enrollmentUpdate.end_date   = endDate;
+
       await db.from("enrollments")
-        .update({ status: "en_curso", updated_at: signedAt })
+        .update(enrollmentUpdate)
         .eq("id", contractRaw.enrollment_id)
         .eq("status", "pendiente_firma");
     }
