@@ -916,7 +916,7 @@ function AssignMemberModal({
   const [selectedId, setSelectedId] = useState("");
 
   useEffect(() => {
-    fetch(`/api/team?role=${role}`)
+    fetch("/api/team")
       .then(r => r.ok ? r.json() : [])
       .then(setMembers)
       .catch(() => {});
