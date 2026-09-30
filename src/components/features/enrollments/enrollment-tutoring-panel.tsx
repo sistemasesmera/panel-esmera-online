@@ -96,10 +96,13 @@ export function EnrollmentTutoringPanel({ enrollmentId, initialSessions }: Props
                 {/* Content */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap mb-0.5">
-                    <span className="text-xs font-bold text-slate-800">{formatDate(s.session_date)}</span>
+                    <span className="text-xs font-bold text-slate-800">Tutoría: {formatDate(s.session_date)}</span>
                     {s.users?.full_name && (
                       <span className="text-[11px] text-slate-400 italic">por {s.users.full_name}</span>
                     )}
+                  </div>
+                  <div className="mb-1">
+                    <span className="text-[11px] text-slate-400">Registrada: {formatDate(s.created_at)}</span>
                   </div>
                   {s.notes && (
                     <p className="text-sm text-slate-600 whitespace-pre-wrap leading-relaxed">{s.notes}</p>
