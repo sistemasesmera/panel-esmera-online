@@ -425,7 +425,6 @@ export function PipelineKanban({ pipelines, oppsByPipeline, currentUser }: Props
   const router = useRouter();
   const [activePipelineId, setActivePipelineId] = useState(pipelines[0]?.id ?? "");
   const [view, setView]           = useState<"kanban" | "list">("kanban");
-  const [zone, setZone]           = useState<"all" | "setter" | "closer">("all");
   const [sheetOpp, setSheetOpp]   = useState<OppEnriched | null>(null);
   const [newLeadOpen, setNewLeadOpen] = useState(false);
 
@@ -499,8 +498,7 @@ export function PipelineKanban({ pipelines, oppsByPipeline, currentUser }: Props
   const pipeline  = pipelines.find(p => p.id === activePipelineId);
   const allOpps   = oppsByPipeline[activePipelineId] ?? [];
   // Exclude won (matriculados) — lost/abandoned still show in their columns
-  const openOpps    = allOpps.filter(o => o.status !== "won");
-  const visibleOpps = zone === "all" ? openOpps : openOpps.filter(o => o.zone === zone);
+  const visibleOpps = allOpps.filter(o => o.status !== "won");
 
   // Apply stageOverrides — update both pipelineStageId AND pipelineStageName
   const resolvedOpps = visibleOpps.map(o => {
@@ -561,21 +559,6 @@ export function PipelineKanban({ pipelines, oppsByPipeline, currentUser }: Props
               {pipelines.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           )}
-
-          <div className="flex rounded-xl border border-slate-200 bg-white overflow-hidden">
-            {(["all", "setter", "closer"] as const).map(z => (
-              <button
-                key={z}
-                onClick={() => setZone(z)}
-                className={cn(
-                  "cursor-pointer px-3 py-2 text-xs font-semibold transition-colors",
-                  zone === z ? "bg-indigo-600 text-white" : "text-slate-500 hover:bg-slate-50"
-                )}
-              >
-                {z === "all" ? "Todos" : z === "setter" ? "Setter" : "Closer"}
-              </button>
-            ))}
-          </div>
 
           <div className="flex items-center gap-1.5 text-xs text-slate-400 font-medium px-2">
             {allOpps.filter(o => o.status === "open").length} leads activos
