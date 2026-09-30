@@ -7,7 +7,7 @@ import {
   X, Phone, PhoneMissed, MessageCircle, Mail, FileText,
   Paperclip, Send, Loader2, Download, GraduationCap, User,
   CreditCard, ClipboardList, Flame, Thermometer, Snowflake,
-  BookOpen, Euro, CheckCircle2, Calendar,
+  BookOpen, Euro, CheckCircle2, Calendar, Pencil,
 } from "lucide-react";
 import {
   createLeadActivity,
@@ -17,6 +17,7 @@ import {
   generateEnrollment,
   scheduleAppointment,
   updateCitaStatus as _updateCitaStatus,
+  updateLeadContactInfo,
 } from "@/app/(app)/crm/pipeline/actions";
 import {
   LOST_REASONS, type LostReason,
@@ -900,8 +901,74 @@ function CitaModal({
   );
 }
 
+// ── EditContactModal ──────────────────────────────────────────────────────────
+function EditContactModal({
+  initial, onSave, onCancel, pending, error,
+}: {
+  initial: { name: string; email: string; phone: string };
+  onSave:  (data: { name: string; email: string; phone: string }) => void;
+  onCancel: () => void;
+  pending:  boolean;
+  error:    string | null;
+}) {
+  const [name,  setName]  = useState(initial.name);
+  const [email, setEmail] = useState(initial.email);
+  const [phone, setPhone] = useState(initial.phone);
+
+  const fieldCls = "w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-300 transition-shadow placeholder:text-slate-300";
+  const labelCls = "block text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1.5";
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-[2px] p-6">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm animate-slide-up">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+          <div className="flex items-center gap-2">
+            <div className="h-7 w-7 rounded-lg bg-indigo-100 flex items-center justify-center">
+              <Pencil className="h-3.5 w-3.5 text-indigo-600" />
+            </div>
+            <p className="text-sm font-black text-slate-900">Editar datos de contacto</p>
+          </div>
+          <button onClick={onCancel} className="cursor-pointer p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="px-5 py-4 space-y-3">
+          <div>
+            <label className={labelCls}>Nombre completo</label>
+            <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Nombre Apellido" className={fieldCls} />
+          </div>
+          <div>
+            <label className={labelCls}>Email</label>
+            <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="correo@ejemplo.com" className={fieldCls} />
+          </div>
+          <div>
+            <label className={labelCls}>Teléfono</label>
+            <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+34 600 000 000" className={fieldCls} />
+          </div>
+          {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
+        </div>
+
+        <div className="flex gap-3 px-5 pb-5">
+          <button onClick={onCancel} className="cursor-pointer flex-1 text-sm font-semibold px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors">
+            Cancelar
+          </button>
+          <button
+            onClick={() => onSave({ name: name.trim(), email: email.trim(), phone: phone.trim() })}
+            disabled={pending || !name.trim()}
+            className="cursor-pointer flex-1 flex items-center justify-center gap-2 text-sm font-semibold px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50 transition-colors"
+          >
+            {pending && <Loader2 className="h-4 w-4 animate-spin" />}
+            Guardar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── LeadSheet ─────────────────────────────────────────────────────────────────
-type ModalMode = "lost" | "unqualified" | "contract" | "ficha" | "enrollment" | "cita" | "simulate";
+type ModalMode = "lost" | "unqualified" | "contract" | "ficha" | "enrollment" | "cita" | "simulate" | "editContact";
 
 function findStageId(stages: GhlPipelineStage[], keyword: string): string | undefined {
   const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
@@ -976,6 +1043,11 @@ export function LeadSheet({
   const [citaPending,        startCita]             = useTransition();
   const [simulateErr,        setSimulateErr]        = useState<string | null>(null);
   const [simulatePending,    setSimulatePending]    = useState(false);
+  const [editContactErr,     setEditContactErr]     = useState<string | null>(null);
+  const [editContactPending, startEditContact]      = useTransition();
+  // Local override so edits are reflected immediately without waiting for a parent refresh
+  const [contactOverride, setContactOverride] = useState<{ name: string; email: string | null; phone: string | null } | null>(null);
+  const contact = contactOverride ?? opp.contact;
 
   // ── Fetchers ──
   const fetchActivity = useCallback(async () => {
@@ -1097,6 +1169,25 @@ export function LeadSheet({
       setEnrollId(res.enrollmentId);
       setExistingEnrollment({ id: res.enrollmentId, number: res.enrollmentNumber, studentId: "" });
       setModal(null);
+    });
+  }
+
+  function handleSaveContact(data: { name: string; email: string; phone: string }) {
+    setEditContactErr(null);
+    startEditContact(async () => {
+      const res = await updateLeadContactInfo(
+        opp.contact.id,
+        opp.id,
+        { name: data.name, email: data.email, phone: data.phone },
+        { name: contact.name, email: contact.email, phone: contact.phone },
+      );
+      if ("error" in res) { setEditContactErr(res.error); return; }
+      setContactOverride({ name: data.name, email: data.email || null, phone: data.phone || null });
+      setModal(null);
+      toast.success("Datos actualizados");
+      setActLoading(true);
+      await fetchActivity();
+      onAction?.();
     });
   }
 
@@ -1259,6 +1350,15 @@ export function LeadSheet({
             onCancel={() => { setModal(null); setCitaErr(null); }}
           />
         )}
+        {modal === "editContact" && (
+          <EditContactModal
+            initial={{ name: contact.name, email: contact.email ?? "", phone: contact.phone ?? "" }}
+            pending={editContactPending}
+            error={editContactErr}
+            onSave={handleSaveContact}
+            onCancel={() => { setModal(null); setEditContactErr(null); }}
+          />
+        )}
         {modal === "simulate" && (
           <EnrollmentModal
             opp={opp}
@@ -1297,10 +1397,10 @@ export function LeadSheet({
         <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-slate-100 shrink-0">
           <div className="flex items-center gap-3 min-w-0">
             <div className="h-9 w-9 rounded-full bg-gradient-to-br from-indigo-400 to-indigo-600 flex items-center justify-center text-white text-xs font-black shrink-0">
-              {opp.contact.name.split(" ").slice(0, 2).map(n => n[0]).join("").toUpperCase()}
+              {contact.name.split(" ").slice(0, 2).map(n => n[0]).join("").toUpperCase()}
             </div>
             <div className="min-w-0">
-              <p className="font-black text-slate-900 text-sm leading-tight truncate">{opp.contact.name}</p>
+              <p className="font-black text-slate-900 text-sm leading-tight truncate">{contact.name}</p>
               <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded-full mt-0.5 inline-block", stageCls[opp.zone])}>
                 {opp.pipelineStageName}
               </span>
@@ -1370,16 +1470,35 @@ export function LeadSheet({
 
         {/* ── Contact info ── */}
         <div className="px-5 py-3 border-b border-slate-100 shrink-0 space-y-1">
-          {opp.contact.email && (
-            <div className="flex items-center gap-2 text-xs text-slate-500">
-              <Mail className="h-3.5 w-3.5 text-slate-400 shrink-0" />{opp.contact.email}
+          <div className="flex items-center justify-between mb-0.5">
+            <div className="space-y-1 flex-1 min-w-0">
+              {contact.email ? (
+                <div className="flex items-center gap-2 text-xs text-slate-500">
+                  <Mail className="h-3.5 w-3.5 text-slate-400 shrink-0" />{contact.email}
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-xs text-slate-400 italic">
+                  <Mail className="h-3.5 w-3.5 shrink-0" />Sin email
+                </div>
+              )}
+              {contact.phone ? (
+                <div className="flex items-center gap-2 text-xs text-slate-500">
+                  <Phone className="h-3.5 w-3.5 text-slate-400 shrink-0" />{contact.phone}
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-xs text-slate-400 italic">
+                  <Phone className="h-3.5 w-3.5 shrink-0" />Sin teléfono
+                </div>
+              )}
             </div>
-          )}
-          {opp.contact.phone && (
-            <div className="flex items-center gap-2 text-xs text-slate-500">
-              <Phone className="h-3.5 w-3.5 text-slate-400 shrink-0" />{opp.contact.phone}
-            </div>
-          )}
+            <button
+              onClick={() => { setEditContactErr(null); setModal("editContact"); }}
+              className="cursor-pointer shrink-0 ml-3 inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors"
+            >
+              <Pencil className="h-3 w-3" />
+              Editar
+            </button>
+          </div>
           {profile.dni && (
             <div className="flex items-center gap-2 text-xs text-slate-500">
               <CreditCard className="h-3.5 w-3.5 text-slate-400 shrink-0" />

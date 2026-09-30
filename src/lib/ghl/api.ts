@@ -209,6 +209,29 @@ export async function createGhlAppointment(opts: {
   return { id: data.id ?? data.event?.id ?? "" };
 }
 
+export async function updateGhlContact(
+  contactId: string,
+  data: { name?: string; email?: string; phone?: string },
+): Promise<void> {
+  if (!process.env.GHL_API_KEY) throw new Error("GHL_API_KEY not set");
+
+  const body: Record<string, unknown> = {};
+  if (data.name) {
+    const [firstName, ...rest] = data.name.trim().split(" ");
+    body.firstName = firstName;
+    if (rest.length) body.lastName = rest.join(" ");
+  }
+  if (data.email !== undefined) body.email = data.email;
+  if (data.phone !== undefined) body.phone = data.phone;
+
+  const res = await fetch(`${GHL_API_BASE}/contacts/${contactId}`, {
+    method:  "PUT",
+    headers: ghlHeaders(),
+    body:    JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`GHL update contact error ${res.status}: ${await res.text()}`);
+}
+
 export async function createGhlContact(data: {
   name:   string;
   email?: string;

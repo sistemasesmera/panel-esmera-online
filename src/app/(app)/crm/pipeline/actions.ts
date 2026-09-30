@@ -3,7 +3,7 @@
 import { requireCapability } from "@/lib/auth/require-role";
 import { requireAuth } from "@/lib/auth/require-role";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { updateGhlOpportunity, createGhlContact, createGhlOpportunity } from "@/lib/ghl/api";
+import { updateGhlOpportunity, updateGhlContact, createGhlContact, createGhlOpportunity } from "@/lib/ghl/api";
 import { normalizePhone } from "@/lib/utils/phone";
 import type { NoteType } from "@/lib/data/lead-notes.repository";
 import { LOST_REASONS, type LostReason, UNQUALIFIED_REASONS, type UnqualifiedReason } from "@/lib/domain/crm/lead-status";
@@ -470,5 +470,50 @@ export async function createLead(
     return { success: true, contactId: contact.id, oppId: opp.id };
   } catch (err: any) {
     return { error: err.message ?? "Error al crear el lead" };
+  }
+}
+
+export async function updateLeadContactInfo(
+  contactId: string,
+  oppId:     string,
+  data: { name?: string; email?: string; phone?: string },
+  original: { name: string; email: string | null; phone: string | null },
+): Promise<{ success: true } | { error: string }> {
+  await requireCapability("viewPipeline");
+
+  const updates: string[] = [];
+  if (data.name  && data.name  !== original.name)  updates.push(`Nombre: "${original.name}" → "${data.name}"`);
+  if (data.email !== undefined && data.email !== (original.email ?? ""))  updates.push(`Email: "${original.email ?? "—"}" → "${data.email}"`);
+  if (data.phone !== undefined && data.phone !== (original.phone ?? ""))  updates.push(`Teléfono: "${original.phone ?? "—"}" → "${data.phone}"`);
+
+  if (!updates.length) return { success: true };
+
+  // Normalize phone before sending to GHL
+  const rawPhone = data.phone?.trim() ?? null;
+  const normPhone = rawPhone ? normalizePhone(rawPhone) : null;
+  const validPhone = normPhone?.startsWith("+") ? normPhone : (rawPhone ?? undefined);
+
+  try {
+    await updateGhlContact(contactId, {
+      name:  data.name?.trim(),
+      email: data.email?.trim(),
+      phone: validPhone,
+    });
+
+    // Log the change as an activity note
+    const db = createAdminClient() as any;
+    const user = await requireAuth();
+    await db.from("lead_notes").insert({
+      ghl_contact_id:     contactId,
+      ghl_opportunity_id: oppId,
+      type:               "nota",
+      content:            `✏️ Datos de contacto actualizados:\n${updates.join("\n")}`,
+      created_by:         user.id,
+      created_by_name:    user.full_name ?? user.email ?? "Sistema",
+    }).then(() => {}, () => {});
+
+    return { success: true };
+  } catch (err: any) {
+    return { error: err.message ?? "Error al actualizar el contacto" };
   }
 }
