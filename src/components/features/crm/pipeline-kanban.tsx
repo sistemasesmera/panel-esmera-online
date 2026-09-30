@@ -185,6 +185,22 @@ function OppCard({
         </div>
       </div>
 
+      {/* Setter / Closer */}
+      {(opp.setter_name || opp.closer_name) && (
+        <div className="flex flex-wrap gap-1.5 mb-2.5">
+          {opp.setter_name && (
+            <span className="inline-flex items-center gap-1 text-[10px] font-semibold bg-sky-50 text-sky-700 ring-1 ring-sky-200/60 rounded-full px-2 py-0.5 max-w-full truncate">
+              <span className="text-sky-400 shrink-0">S</span>{opp.setter_name.split(" ")[0]}
+            </span>
+          )}
+          {opp.closer_name && (
+            <span className="inline-flex items-center gap-1 text-[10px] font-semibold bg-violet-50 text-violet-700 ring-1 ring-violet-200/60 rounded-full px-2 py-0.5 max-w-full truncate">
+              <span className="text-violet-400 shrink-0">C</span>{opp.closer_name.split(" ")[0]}
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Footer: valor GHL */}
       <div className="flex items-center justify-between pt-2 border-t border-slate-100">
         {opp.monetaryValue && !opp.importe_previsto ? (
@@ -323,6 +339,7 @@ function ListView({ opps, onOpen }: { opps: OppEnriched[]; onOpen: (opp: OppEnri
             <th className="text-left px-5 py-3.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Contacto</th>
             <th className="text-left px-5 py-3.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Etapa</th>
             <th className="text-left px-5 py-3.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Curso</th>
+            <th className="text-left px-5 py-3.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Equipo</th>
             <th className="text-right px-5 py-3.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Valor</th>
             <th className="text-left px-5 py-3.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Estado</th>
             <th className="text-left px-5 py-3.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Hace</th>
@@ -356,6 +373,21 @@ function ListView({ opps, onOpen }: { opps: OppEnriched[]; onOpen: (opp: OppEnri
                   </div>
                 </td>
                 <td className="px-5 py-3 text-xs text-slate-500 max-w-[160px] truncate">{opp.cursoValue ?? "—"}</td>
+                <td className="px-5 py-3">
+                  <div className="flex flex-col gap-1">
+                    {opp.setter_name && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold bg-sky-50 text-sky-700 ring-1 ring-sky-200/60 rounded-full px-2 py-0.5 w-fit">
+                        <span className="text-sky-400">S</span>{opp.setter_name.split(" ")[0]}
+                      </span>
+                    )}
+                    {opp.closer_name && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold bg-violet-50 text-violet-700 ring-1 ring-violet-200/60 rounded-full px-2 py-0.5 w-fit">
+                        <span className="text-violet-400">C</span>{opp.closer_name.split(" ")[0]}
+                      </span>
+                    )}
+                    {!opp.setter_name && !opp.closer_name && <span className="text-[10px] text-slate-300">—</span>}
+                  </div>
+                </td>
                 <td className="px-5 py-3 text-right text-xs font-bold text-emerald-600 tabular-nums">
                   {opp.monetaryValue ? fmt(opp.monetaryValue) : "—"}
                 </td>
