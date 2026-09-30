@@ -4,16 +4,22 @@ import { useState } from "react";
 import { Plus } from "lucide-react";
 import { NewEnrollmentModal } from "./new-enrollment-modal";
 
-type Course = { id: string; name: string; price: number | null };
+type Course    = { id: string; name: string; price: number | null };
+type Platform  = { id: string; name: string };
+type Tutor     = { id: string; full_name: string };
 
 export function StudentEnrollmentActions({
   studentId,
   studentName,
   courses,
+  platforms,
+  tutors,
 }: {
   studentId:   string;
   studentName: string;
   courses:     Course[];
+  platforms:   Platform[];
+  tutors:      Tutor[];
 }) {
   const [open, setOpen] = useState(false);
 
@@ -32,6 +38,8 @@ export function StudentEnrollmentActions({
           studentId={studentId}
           studentName={studentName}
           courses={courses}
+          platforms={platforms}
+          tutors={tutors}
           onClose={() => setOpen(false)}
         />
       )}

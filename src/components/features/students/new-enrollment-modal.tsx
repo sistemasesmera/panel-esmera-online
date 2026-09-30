@@ -7,7 +7,9 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { createEnrollmentFromStudent } from "@/app/(app)/students/[id]/actions";
 
-type Course = { id: string; name: string; price: number | null };
+type Course    = { id: string; name: string; price: number | null };
+type Platform  = { id: string; name: string };
+type Tutor     = { id: string; full_name: string };
 
 type PaymentType   = "contado" | "financiado";
 type PaymentOption = "efectivo" | "transferencia" | "sabadell" | "sequra" | "esmera";
@@ -28,11 +30,15 @@ export function NewEnrollmentModal({
   studentId,
   studentName,
   courses,
+  platforms,
+  tutors,
   onClose,
 }: {
   studentId:   string;
   studentName: string;
   courses:     Course[];
+  platforms:   Platform[];
+  tutors:      Tutor[];
   onClose:     () => void;
 }) {
   const router = useRouter();
@@ -43,6 +49,8 @@ export function NewEnrollmentModal({
   const [paymentType,    setPaymentType]    = useState<PaymentType>("contado");
   const [paymentOption,  setPaymentOption]  = useState<PaymentOption>("efectivo");
   const [durationMonths, setDurationMonths] = useState("");
+  const [platformId,     setPlatformId]     = useState(() => platforms[0]?.id ?? "");
+  const [tutorId,        setTutorId]        = useState(() => tutors.length === 1 ? tutors[0].id : "");
   const [enrollNumber,   setEnrollNumber]   = useState<number | null>(null);
   const [enrollId,       setEnrollId]       = useState<string | null>(null);
 
@@ -64,7 +72,7 @@ export function NewEnrollmentModal({
 
     startTransition(async () => {
       const dur = durationMonths ? parseInt(durationMonths) : null;
-      const res = await createEnrollmentFromStudent(studentId, courseId, amt, paymentType, paymentOption, dur);
+      const res = await createEnrollmentFromStudent(studentId, courseId, amt, paymentType, paymentOption, dur, platformId || null, tutorId || null);
       if ("error" in res) { toast.error(res.error); return; }
       setEnrollNumber(res.enrollmentNumber);
       setEnrollId(res.enrollmentId);
@@ -193,6 +201,28 @@ export function NewEnrollmentModal({
               ))}
             </div>
           </div>
+          {/* Tutor */}
+          {tutors.length > 0 && (
+            <div>
+              <label className={labelCls}>Tutor asignado</label>
+              <select value={tutorId} onChange={e => setTutorId(e.target.value)} className={inputCls}>
+                <option value="">Sin tutor</option>
+                {tutors.map(t => <option key={t.id} value={t.id}>{t.full_name}</option>)}
+              </select>
+            </div>
+          )}
+
+          {/* Platform */}
+          {platforms.length > 0 && (
+            <div>
+              <label className={labelCls}>Plataforma</label>
+              <select value={platformId} onChange={e => setPlatformId(e.target.value)} className={inputCls}>
+                <option value="">Sin plataforma</option>
+                {platforms.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </div>
+          )}
+
           {/* Duration */}
           <div>
             <label className={labelCls}>Duración (meses)</label>

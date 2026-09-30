@@ -33,7 +33,9 @@ import type {
 } from "@/lib/data/lead-profiles.repository";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-type Course = { id: string; name: string; price: number | null };
+type Course   = { id: string; name: string; price: number | null };
+type Platform = { id: string; name: string };
+type Tutor    = { id: string; full_name: string };
 
 // ── Activity type config ──────────────────────────────────────────────────────
 type TypeDef = {
@@ -379,23 +381,28 @@ const PAYMENT_OPTIONS: Record<PaymentType, { value: PaymentOption; label: string
 };
 
 function EnrollmentModal({
-  opp, courses, initialCourseId, initialAmount, onConfirm, onCancel, pending, error, mode = "enroll",
+  opp, courses, platforms, tutors, initialCourseId, initialAmount, onConfirm, onCancel, pending, error, mode = "enroll",
 }: {
   opp:             OppEnriched;
   courses:         Course[];
+  platforms:       Platform[];
+  tutors:          Tutor[];
   initialCourseId: string | null;
   initialAmount:   number | null;
-  onConfirm:       (courseId: string, amount: number, paymentType: PaymentType, paymentOption: PaymentOption) => void;
+  onConfirm:       (courseId: string, amount: number, paymentType: PaymentType, paymentOption: PaymentOption, durationMonths: number | null, platformId: string | null, tutorId: string | null) => void;
   onCancel:        () => void;
   pending:         boolean;
   error:           string | null;
   mode?:           "enroll" | "simulate";
 }) {
-  const [courseId,      setCourseId]      = useState(initialCourseId ?? "");
-  const [amount,        setAmount]        = useState(initialAmount != null ? String(initialAmount) : "");
-  const [paymentType,   setPaymentType]   = useState<PaymentType | null>(null);
-  const [paymentOption, setPaymentOption] = useState<PaymentOption | null>(null);
-  const [localErr,      setLocalErr]      = useState<string | null>(null);
+  const [courseId,       setCourseId]       = useState(initialCourseId ?? "");
+  const [amount,         setAmount]         = useState(initialAmount != null ? String(initialAmount) : "");
+  const [paymentType,    setPaymentType]    = useState<PaymentType | null>(null);
+  const [paymentOption,  setPaymentOption]  = useState<PaymentOption | null>(null);
+  const [durationMonths, setDurationMonths] = useState("");
+  const [platformId,     setPlatformId]     = useState(() => platforms[0]?.id ?? "");
+  const [tutorId,        setTutorId]        = useState(() => tutors.length === 1 ? tutors[0].id : "");
+  const [localErr,       setLocalErr]       = useState<string | null>(null);
 
   const selectedCourse = courses.find(c => c.id === courseId);
 
@@ -406,7 +413,7 @@ function EnrollmentModal({
     if (!paymentType)   { setLocalErr("Selecciona el método de pago"); return; }
     if (!paymentOption) { setLocalErr("Selecciona la modalidad de pago"); return; }
     setLocalErr(null);
-    onConfirm(courseId, n, paymentType, paymentOption);
+    onConfirm(courseId, n, paymentType, paymentOption, durationMonths ? parseInt(durationMonths) : null, platformId || null, tutorId || null);
   }
 
   const labelCls = "block text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1.5";
@@ -524,6 +531,55 @@ function EnrollmentModal({
                   </button>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* Tutor */}
+          {mode === "enroll" && tutors.length > 0 && (
+            <div>
+              <label className={labelCls}>Tutor asignado</label>
+              <select
+                value={tutorId}
+                onChange={e => { setTutorId(e.target.value); setLocalErr(null); }}
+                className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-300 transition-shadow"
+              >
+                <option value="">Sin tutor</option>
+                {tutors.map(t => <option key={t.id} value={t.id}>{t.full_name}</option>)}
+              </select>
+            </div>
+          )}
+
+          {/* Plataforma */}
+          {mode === "enroll" && platforms.length > 0 && (
+            <div>
+              <label className={labelCls}>Plataforma</label>
+              <select
+                value={platformId}
+                onChange={e => { setPlatformId(e.target.value); setLocalErr(null); }}
+                className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-300 transition-shadow"
+              >
+                <option value="">Sin plataforma</option>
+                {platforms.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </div>
+          )}
+
+          {/* Duración */}
+          {mode === "enroll" && (
+            <div>
+              <label className={labelCls}>Duración (meses)</label>
+              <input
+                type="number"
+                min={1}
+                max={60}
+                value={durationMonths}
+                onChange={e => { setDurationMonths(e.target.value); setLocalErr(null); }}
+                placeholder="Ej: 6"
+                className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-300 transition-shadow"
+              />
+              <p className="mt-1.5 text-[11px] text-indigo-500">
+                La matrícula correrá desde la firma del contrato. La fecha de fin se calculará automáticamente.
+              </p>
             </div>
           )}
 
@@ -1114,6 +1170,8 @@ export function LeadSheet({
   const [actLoading, setActLoading] = useState(true);
   const [profile,    setProfile]    = useState<Partial<LeadProfile>>({});
   const [courses,    setCourses]    = useState<Course[]>([]);
+  const [platforms,  setPlatforms]  = useState<Platform[]>([]);
+  const [tutors,     setTutors]     = useState<Tutor[]>([]);
 
   const [noteType,     setNoteType]     = useState<NoteType>("nota");
   const [content,      setContent]      = useState("");
@@ -1188,12 +1246,28 @@ export function LeadSheet({
     } catch {}
   }, []);
 
+  const fetchPlatforms = useCallback(async () => {
+    try {
+      const res = await fetch("/api/platforms");
+      if (res.ok) setPlatforms(await res.json());
+    } catch {}
+  }, []);
+
+  const fetchTutors = useCallback(async () => {
+    try {
+      const res = await fetch("/api/tutors");
+      if (res.ok) setTutors(await res.json());
+    } catch {}
+  }, []);
+
   useEffect(() => {
     fetchActivity();
     fetchProfile();
     fetchCourses();
+    fetchPlatforms();
+    fetchTutors();
     fetchEnrollmentStatus();
-  }, [fetchActivity, fetchProfile, fetchCourses, fetchEnrollmentStatus]);
+  }, [fetchActivity, fetchProfile, fetchCourses, fetchPlatforms, fetchTutors, fetchEnrollmentStatus]);
 
   useEffect(() => {
     const h = (e: KeyboardEvent) => { if (e.key === "Escape") { if (modal) setModal(null); else onClose(); } };
@@ -1254,6 +1328,9 @@ export function LeadSheet({
     amount: number,
     paymentType: PaymentType,
     paymentOption: PaymentOption,
+    durationMonths: number | null,
+    platformId: string | null,
+    tutorId: string | null,
   ) {
     setEnrollErr(null);
     startEnroll(async () => {
@@ -1267,6 +1344,9 @@ export function LeadSheet({
         paymentType,
         paymentOption,
         matriculadoStageId,
+        durationMonths,
+        platformId,
+        tutorId,
       );
       if ("error" in res) { setEnrollErr(res.error); return; }
       setEnrollNumber(res.enrollmentNumber);
@@ -1329,6 +1409,9 @@ export function LeadSheet({
     amount: number,
     paymentType: PaymentType,
     paymentOption: PaymentOption,
+    _durationMonths: number | null,
+    _platformId: string | null,
+    _tutorId: string | null,
   ) {
     setSimulateErr(null);
     setSimulatePending(true);
@@ -1450,6 +1533,8 @@ export function LeadSheet({
           <EnrollmentModal
             opp={opp}
             courses={courses}
+            platforms={platforms}
+            tutors={tutors}
             initialCourseId={profile.curso_interes_id ?? null}
             initialAmount={profile.importe_previsto ?? null}
             pending={enrollPending}
@@ -1489,6 +1574,8 @@ export function LeadSheet({
           <EnrollmentModal
             opp={opp}
             courses={courses}
+            platforms={platforms}
+            tutors={tutors}
             initialCourseId={profile.curso_interes_id ?? null}
             initialAmount={profile.importe_previsto ?? null}
             pending={simulatePending}

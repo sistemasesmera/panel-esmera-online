@@ -148,15 +148,18 @@ export async function upsertLeadProfile(
 }
 
 export async function generateEnrollment(
-  oppId:              string,
-  contactId:          string,
-  contact:            { name: string; email: string; phone: string | null },
-  dni:                string | null,
-  courseId:           string,
-  amount:             number,
-  paymentType:        "contado" | "financiado",
-  paymentOption:      string,
+  oppId:               string,
+  contactId:           string,
+  contact:             { name: string; email: string; phone: string | null },
+  dni:                 string | null,
+  courseId:            string,
+  amount:              number,
+  paymentType:         "contado" | "financiado",
+  paymentOption:       string,
   matriculadoStageId?: string,
+  durationMonths?:     number | null,
+  platformId?:         string | null,
+  tutorId?:            string | null,
 ): Promise<{ success: true; enrollmentNumber: number; enrollmentId: string } | { error: string }> {
   await requireCapability("viewPipeline");
   const user = await requireAuth();
@@ -222,6 +225,9 @@ export async function generateEnrollment(
       assigned_to:        user.id,
       setter_name:        lp?.setter_name ?? null,
       closer_name:        lp?.closer_name ?? null,
+      duration_months:    durationMonths ?? null,
+      platform_id:        platformId     ?? null,
+      tutor_id:           tutorId        ?? null,
     })
     .select("id, enrollment_number")
     .single();

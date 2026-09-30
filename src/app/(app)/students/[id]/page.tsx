@@ -41,6 +41,8 @@ export default async function StudentDetailPage({
     { data: student, error },
     { data: enrollmentsRaw },
     { data: courses },
+    { data: platforms },
+    { data: tutors },
   ] = await Promise.all([
     db.from("students")
       .select("id, full_name, email, phone, dni_nie, province, postal_code, birth_date, created_at, ghl_contact_id")
@@ -58,6 +60,15 @@ export default async function StudentDetailPage({
       .select("id, name, price")
       .eq("active", true)
       .order("name"),
+
+    db.from("platforms")
+      .select("id, name")
+      .order("name"),
+
+    db.from("users")
+      .select("id, full_name")
+      .eq("role", "tutor")
+      .order("full_name"),
   ]);
 
   if (error || !student) notFound();
@@ -118,6 +129,8 @@ export default async function StudentDetailPage({
           studentId={student.id}
           studentName={student.full_name}
           courses={coursesForModal}
+          platforms={(platforms ?? []) as { id: string; name: string }[]}
+          tutors={(tutors ?? []) as { id: string; full_name: string }[]}
         />
       </div>
 
