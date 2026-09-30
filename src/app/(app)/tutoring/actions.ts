@@ -19,7 +19,7 @@ export type CreateSessionInput = z.infer<typeof sessionSchema>;
 type ActionResult = { error: string; success?: never } | { success: true; error?: never };
 
 export async function createTutoringSession(input: CreateSessionInput): Promise<ActionResult> {
-  const user   = await requireCapability("viewTutoring");
+  const user   = await requireCapability("viewEnrollments");
   const parsed = sessionSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 
@@ -42,7 +42,7 @@ export async function updateTutoringSession(
   id: string,
   input: Omit<CreateSessionInput, "enrollment_id">,
 ): Promise<ActionResult> {
-  await requireCapability("viewTutoring");
+  await requireCapability("viewEnrollments");
   const parsed = sessionSchema.omit({ enrollment_id: true }).safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 
@@ -60,7 +60,7 @@ export async function updateTutoringSession(
 }
 
 export async function deleteTutoringSession(id: string): Promise<ActionResult> {
-  await requireCapability("viewTutoring");
+  await requireCapability("viewEnrollments");
   const db = createAdminClient() as any;
 
   const { data: existing } = await db

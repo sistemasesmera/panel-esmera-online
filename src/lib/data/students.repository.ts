@@ -26,29 +26,50 @@ export async function listStudents(): Promise<Student[]> {
   return (data ?? []) as Student[];
 }
 
-// Filtered version for setter/closer: only students where they participated
+// Filtered version for setter/closer: GHL path + direct assigned_to
 export async function listStudentsForUser(userId: string): Promise<Student[]> {
   const db = createAdminClient() as any;
 
-  // 1. Get contact IDs where user is setter or closer
+  const SELECT = "id, full_name, email, phone, dni_nie, province, created_at";
+
+  // Path A: GHL-linked students
   const { data: profiles } = await db
     .from("lead_profiles")
     .select("ghl_contact_id")
     .or(`setter_id.eq.${userId},closer_id.eq.${userId}`);
 
   const contactIds: string[] = (profiles ?? []).map((p: any) => p.ghl_contact_id).filter(Boolean);
-  if (!contactIds.length) return [];
 
-  // 2. Get students with those contact IDs
-  const { data, error } = await db
-    .from("students")
-    .select("id, full_name, email, phone, dni_nie, province, created_at")
-    .in("ghl_contact_id", contactIds)
-    .is("deleted_at", null)
-    .order("created_at", { ascending: false });
+  let ghlStudents: Student[] = [];
+  if (contactIds.length) {
+    const { data } = await db.from("students").select(SELECT).in("ghl_contact_id", contactIds).is("deleted_at", null);
+    ghlStudents = (data ?? []) as Student[];
+  }
 
-  if (error) throw new Error(error.message);
-  return (data ?? []) as Student[];
+  // Path B: students via directly assigned enrollments
+  const { data: assigned } = await db
+    .from("enrollments")
+    .select("student_id")
+    .eq("assigned_to", userId)
+    .is("deleted_at", null);
+
+  const directIds: string[] = [...new Set<string>((assigned ?? []).map((e: any) => e.student_id).filter(Boolean))];
+
+  let directStudents: Student[] = [];
+  if (directIds.length) {
+    const { data } = await db.from("students").select(SELECT).in("id", directIds).is("deleted_at", null);
+    directStudents = (data ?? []) as Student[];
+  }
+
+  // Merge and deduplicate
+  const seen = new Set<string>();
+  const merged = [...ghlStudents, ...directStudents].filter(s => {
+    if (seen.has(s.id)) return false;
+    seen.add(s.id);
+    return true;
+  });
+
+  return merged.sort((a, b) => b.created_at.localeCompare(a.created_at));
 }
 
 export async function searchStudents(q: string): Promise<Student[]> {

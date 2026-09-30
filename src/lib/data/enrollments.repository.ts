@@ -13,9 +13,10 @@ export type EnrollmentRow = {
   students: { full_name: string; email: string } | null;
   courses: { name: string } | null;
   platforms: { name: string } | null;
+  tutor: { full_name: string } | null;
 };
 
-const ENROLLMENT_SELECT = "id, enrollment_number, status, enrollment_date, start_date, end_date, created_at, students(full_name, email), courses(name), platforms(name)";
+const ENROLLMENT_SELECT = "id, enrollment_number, status, enrollment_date, start_date, end_date, created_at, students(full_name, email), courses(name), platforms(name), tutor:users!tutor_id(full_name)";
 
 export async function listEnrollments(): Promise<EnrollmentRow[]> {
   const supabase = await createClient();
@@ -28,36 +29,59 @@ export async function listEnrollments(): Promise<EnrollmentRow[]> {
   return (data ?? []) as unknown as EnrollmentRow[];
 }
 
-// Filtered version for setter/closer: only enrollments where they participated
+// Filtered version for tutors: enrollments assigned to them via tutor_id
+export async function listEnrollmentsForTutor(userId: string): Promise<EnrollmentRow[]> {
+  const db = createAdminClient() as any;
+
+  const { data, error } = await db
+    .from("enrollments")
+    .select(ENROLLMENT_SELECT)
+    .eq("tutor_id", userId)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false });
+
+  if (error) throw new Error(error.message);
+  return (data ?? []) as unknown as EnrollmentRow[];
+}
+
+// Filtered version for setter/closer: GHL path + direct assigned_to
 export async function listEnrollmentsForUser(userId: string): Promise<EnrollmentRow[]> {
   const db = createAdminClient() as any;
 
-  // 1. Get contact IDs where user is setter or closer
+  // Path A: GHL-linked enrollments
   const { data: profiles } = await db
     .from("lead_profiles")
     .select("ghl_contact_id")
     .or(`setter_id.eq.${userId},closer_id.eq.${userId}`);
 
   const contactIds: string[] = (profiles ?? []).map((p: any) => p.ghl_contact_id).filter(Boolean);
-  if (!contactIds.length) return [];
 
-  // 2. Get student IDs for those contacts
-  const { data: studentRows } = await db
-    .from("students")
-    .select("id")
-    .in("ghl_contact_id", contactIds);
+  let ghlRows: EnrollmentRow[] = [];
+  if (contactIds.length) {
+    const { data: studentRows } = await db.from("students").select("id").in("ghl_contact_id", contactIds);
+    const studentIds: string[] = (studentRows ?? []).map((s: any) => s.id);
+    if (studentIds.length) {
+      const { data } = await db.from("enrollments").select(ENROLLMENT_SELECT).in("student_id", studentIds).is("deleted_at", null);
+      ghlRows = (data ?? []) as unknown as EnrollmentRow[];
+    }
+  }
 
-  const studentIds: string[] = (studentRows ?? []).map((s: any) => s.id);
-  if (!studentIds.length) return [];
-
-  // 3. Get enrollments for those students
-  const { data, error } = await db
+  // Path B: directly assigned enrollments
+  const { data: directData } = await db
     .from("enrollments")
     .select(ENROLLMENT_SELECT)
-    .in("student_id", studentIds)
-    .is("deleted_at", null)
-    .order("created_at", { ascending: false });
+    .eq("assigned_to", userId)
+    .is("deleted_at", null);
 
-  if (error) throw new Error(error.message);
-  return (data ?? []) as unknown as EnrollmentRow[];
+  const directRows = (directData ?? []) as unknown as EnrollmentRow[];
+
+  // Merge and deduplicate
+  const seen = new Set<string>();
+  const merged = [...ghlRows, ...directRows].filter(e => {
+    if (seen.has(e.id)) return false;
+    seen.add(e.id);
+    return true;
+  });
+
+  return merged.sort((a, b) => b.created_at.localeCompare(a.created_at));
 }

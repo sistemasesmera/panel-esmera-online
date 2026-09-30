@@ -1,8 +1,8 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
-import { Search, GraduationCap, Mail, Phone, MapPin, ArrowRight } from "lucide-react";
-import { cn, formatDate } from "@/lib/utils";
+import { Search, GraduationCap, Mail, Phone, ArrowRight } from "lucide-react";
+import { cn, formatDateTime } from "@/lib/utils";
 import type { Student } from "@/lib/data/students.repository";
 
 function initials(name: string) {
@@ -17,13 +17,6 @@ const AVATAR_GRADIENTS = [
   "from-amber-400 to-amber-600",
 ];
 
-const PROVINCE_COLORS = [
-  "bg-indigo-50 text-indigo-600 ring-1 ring-indigo-200/60",
-  "bg-violet-50 text-violet-600 ring-1 ring-violet-200/60",
-  "bg-teal-50 text-teal-600 ring-1 ring-teal-200/60",
-  "bg-rose-50 text-rose-600 ring-1 ring-rose-200/60",
-  "bg-amber-50 text-amber-600 ring-1 ring-amber-200/60",
-];
 
 export function StudentsTable({ students }: { students: Student[] }) {
   const [search, setSearch] = useState("");
@@ -35,8 +28,7 @@ export function StudentsTable({ students }: { students: Student[] }) {
       s.full_name.toLowerCase().includes(q) ||
       s.email.toLowerCase().includes(q) ||
       s.phone?.toLowerCase().includes(q) ||
-      s.dni_nie?.toLowerCase().includes(q) ||
-      s.province?.toLowerCase().includes(q)
+      s.dni_nie?.toLowerCase().includes(q)
     );
   });
 
@@ -79,8 +71,6 @@ export function StudentsTable({ students }: { students: Student[] }) {
               <tr className="border-b border-slate-100 bg-slate-50/80">
                 <th className="text-left px-5 py-3.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Alumno</th>
                 <th className="text-left px-5 py-3.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Contacto</th>
-                <th className="text-left px-5 py-3.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">DNI / NIE</th>
-                <th className="text-left px-5 py-3.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Provincia</th>
                 <th className="text-left px-5 py-3.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Alta</th>
                 <th className="w-10" />
               </tr>
@@ -117,21 +107,8 @@ export function StudentsTable({ students }: { students: Student[] }) {
                         )}
                       </div>
                     </td>
-                    <td className="px-5 py-3.5 text-xs text-slate-600 font-mono font-medium">
-                      {student.dni_nie ?? <span className="text-slate-300">—</span>}
-                    </td>
-                    <td className="px-5 py-3.5">
-                      {student.province ? (
-                        <span className={cn("inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full", PROVINCE_COLORS[student.province.charCodeAt(0) % 5])}>
-                          <MapPin className="h-2.5 w-2.5" />
-                          {student.province}
-                        </span>
-                      ) : (
-                        <span className="text-slate-300 text-xs">—</span>
-                      )}
-                    </td>
-                    <td className="px-5 py-3.5 text-xs text-slate-400 font-medium">
-                      {formatDate(student.created_at)}
+                    <td className="px-5 py-3.5 text-xs text-slate-400 font-medium whitespace-nowrap">
+                      {formatDateTime(student.created_at)}
                     </td>
                     <td className="pr-4">
                       <Link href={`/students/${student.id}`}>

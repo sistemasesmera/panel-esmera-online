@@ -29,12 +29,45 @@ export async function updateEnrollmentInfo(
 
   if (error) return { error: error.message };
 
+  // Build human-readable changes for the activity log
+  const changes: Record<string, string> = {};
+  const lookups: Promise<void>[] = [];
+
+  if ("platform_id" in data) {
+    if (!data.platform_id) {
+      changes["Plataforma"] = "Sin plataforma";
+    } else {
+      lookups.push(
+        db.from("platforms").select("name").eq("id", data.platform_id).single()
+          .then(({ data: p }: any) => { changes["Plataforma"] = p?.name ?? data.platform_id!; })
+      );
+    }
+  }
+  if ("assigned_to" in data) {
+    if (!data.assigned_to) {
+      changes["Tutor"] = "Sin tutor";
+    } else {
+      lookups.push(
+        db.from("users").select("full_name").eq("id", data.assigned_to).single()
+          .then(({ data: u }: any) => { changes["Tutor"] = u?.full_name ?? data.assigned_to!; })
+      );
+    }
+  }
+  if ("start_date"      in data) changes["Fecha inicio"] = data.start_date      ?? "—";
+  if ("end_date"        in data) changes["Fecha fin"]    = data.end_date        ?? "—";
+  if ("duration_months" in data) changes["Duración"]     = data.duration_months ? `${data.duration_months} meses` : "—";
+  if ("notes"           in data) changes["Notas"]        = data.notes
+    ? (data.notes.length > 100 ? data.notes.slice(0, 100) + "…" : data.notes)
+    : "—";
+
+  await Promise.all(lookups);
+
   await db.from("activity_logs").insert({
     user_id:     user.id,
     action:      "enrollment.updated",
     entity_type: "enrollment",
     entity_id:   enrollmentId,
-    details:     { updated_fields: Object.keys(data), updated_by: user.fullName ?? user.id },
+    details:     { changes },
   });
 
   revalidatePath(`/enrollments/${enrollmentId}`);
@@ -57,12 +90,18 @@ export async function updateEnrollmentStatus(
 
   if (error) return { error: error.message };
 
+  const STATUS_LABELS: Record<string, string> = {
+    en_curso:   "En curso",
+    finalizada: "Finalizada",
+    cancelada:  "Cancelada",
+  };
+
   await db.from("activity_logs").insert({
     user_id:     user.id,
     action:      "enrollment.status_changed",
     entity_type: "enrollment",
     entity_id:   enrollmentId,
-    details:     { status, changed_by: user.fullName ?? user.id },
+    details:     { changes: { "Estado": STATUS_LABELS[status] ?? status } },
   });
 
   revalidatePath(`/enrollments/${enrollmentId}`);

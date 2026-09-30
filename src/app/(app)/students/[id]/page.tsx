@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, ArrowRight, BookMarked, GraduationCap, Mail, Phone, MapPin, Hash, Plus } from "lucide-react";
+import { ArrowLeft, ArrowRight, BookMarked, GraduationCap, Mail, Phone, Hash } from "lucide-react";
 import { requireCapability } from "@/lib/auth/require-role";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { cn, formatDate } from "@/lib/utils";
@@ -223,13 +223,8 @@ export default async function StudentDetailPage({
               </DataRow>
             )}
             {student.dni_nie && (
-              <DataRow icon={<Hash className="h-3.5 w-3.5 text-slate-400" />} label="DNI / NIE">
+              <DataRow icon={<Hash className="h-3.5 w-3.5 text-slate-400" />} label="DNI / NIE / Pasaporte">
                 <span className="text-sm font-mono text-slate-700">{student.dni_nie}</span>
-              </DataRow>
-            )}
-            {student.province && (
-              <DataRow icon={<MapPin className="h-3.5 w-3.5 text-slate-400" />} label="Provincia">
-                <span className="text-sm text-slate-700">{student.province}</span>
               </DataRow>
             )}
           </div>

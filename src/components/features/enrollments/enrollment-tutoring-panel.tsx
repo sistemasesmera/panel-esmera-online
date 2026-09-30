@@ -20,12 +20,18 @@ type Props = {
   initialSessions: TutoringRow[];
 };
 
+const PAGE_SIZE = 10;
+
 export function EnrollmentTutoringPanel({ enrollmentId, initialSessions }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [deletingId,  setDeletingId]  = useState<string | null>(null);
   const [dialogMode,  setDialogMode]  = useState<"create" | null>(null);
   const [editSession, setEditSession] = useState<TutoringRow | null>(null);
+  const [visible,     setVisible]     = useState(PAGE_SIZE);
+
+  const shown   = initialSessions.slice(0, visible);
+  const hasMore = visible < initialSessions.length;
 
   function handleDelete(id: string) {
     if (!confirm("¿Eliminar esta tutoría?")) return;
@@ -76,8 +82,9 @@ export function EnrollmentTutoringPanel({ enrollmentId, initialSessions }: Props
           <p className="text-sm text-slate-400">No hay tutorías registradas para esta matrícula.</p>
         </div>
       ) : (
+        <>
         <ul className="divide-y divide-slate-100">
-          {initialSessions.map(s => {
+          {shown.map(s => {
             const ct = CONTACT_CONFIG[s.contact_type];
             return (
               <li key={s.id} className="flex items-start gap-4 px-5 py-4 hover:bg-slate-50/70 transition-colors group">
@@ -131,6 +138,17 @@ export function EnrollmentTutoringPanel({ enrollmentId, initialSessions }: Props
             );
           })}
         </ul>
+        {hasMore && (
+          <div className="px-5 py-3 border-t border-slate-100">
+            <button
+              onClick={() => setVisible(v => v + PAGE_SIZE)}
+              className="cursor-pointer w-full text-xs font-semibold text-indigo-600 hover:text-indigo-800 py-1 transition-colors"
+            >
+              Cargar más ({initialSessions.length - visible} restantes)
+            </button>
+          </div>
+        )}
+        </>
       )}
 
       {/* Dialog */}

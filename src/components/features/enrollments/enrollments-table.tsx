@@ -19,35 +19,29 @@ type Enrollment = {
   enrollment_number: number;
   status: string;
   enrollment_date: string;
+  start_date: string | null;
+  end_date: string | null;
   students:  { full_name: string; email: string } | null;
   courses:   { name: string } | null;
-  platforms: { name: string } | null;
+  tutor:     { full_name: string } | null;
 };
 
 export function EnrollmentsTable({ enrollments }: { enrollments: Enrollment[] }) {
-  const [query,    setQuery]    = useState("");
-  const [status,   setStatus]   = useState("");
-  const [course,   setCourse]   = useState("");
-  const [platform, setPlatform] = useState("");
+  const [query,  setQuery]  = useState("");
+  const [status, setStatus] = useState("");
+  const [course, setCourse] = useState("");
 
-  // Derive unique filter options from data
   const courses = useMemo(() => {
     const names = [...new Set(enrollments.map(e => e.courses?.name).filter(Boolean) as string[])];
     return names.sort();
   }, [enrollments]);
 
-  const platforms = useMemo(() => {
-    const names = [...new Set(enrollments.map(e => e.platforms?.name).filter(Boolean) as string[])];
-    return names.sort();
-  }, [enrollments]);
-
-  const hasFilters = query || status || course || platform;
+  const hasFilters = query || status || course;
 
   function clearFilters() {
     setQuery("");
     setStatus("");
     setCourse("");
-    setPlatform("");
   }
 
   const filtered = useMemo(() => {
@@ -58,12 +52,11 @@ export function EnrollmentsTable({ enrollments }: { enrollments: Enrollment[] })
         e.students?.full_name.toLowerCase().includes(q) ||
         e.students?.email.toLowerCase().includes(q)
       )) return false;
-      if (status   && e.status             !== status)   return false;
-      if (course   && e.courses?.name      !== course)   return false;
-      if (platform && e.platforms?.name    !== platform) return false;
+      if (status && e.status        !== status) return false;
+      if (course && e.courses?.name !== course) return false;
       return true;
     });
-  }, [enrollments, query, status, course, platform]);
+  }, [enrollments, query, status, course]);
 
   const selectCls = "rounded-xl border border-slate-200 bg-white py-2 pl-3 pr-8 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 appearance-none cursor-pointer";
 
@@ -105,17 +98,6 @@ export function EnrollmentsTable({ enrollments }: { enrollments: Enrollment[] })
           </div>
         )}
 
-        {/* Platform filter */}
-        {platforms.length > 0 && (
-          <div className="relative">
-            <select value={platform} onChange={e => setPlatform(e.target.value)} className={cn(selectCls, !platform && "text-slate-400")}>
-              <option value="">Todas las plataformas</option>
-              {platforms.map(p => <option key={p} value={p}>{p}</option>)}
-            </select>
-            <div className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 border-l-4 border-l-transparent border-r-4 border-r-transparent border-t-4 border-t-slate-400" />
-          </div>
-        )}
-
         {/* Clear + count */}
         <div className="flex items-center gap-2 ml-auto">
           {hasFilters && (
@@ -141,9 +123,6 @@ export function EnrollmentsTable({ enrollments }: { enrollments: Enrollment[] })
           )}
           {course && (
             <FilterChip label={course} onRemove={() => setCourse("")} />
-          )}
-          {platform && (
-            <FilterChip label={platform} onRemove={() => setPlatform("")} />
           )}
         </div>
       )}
@@ -171,9 +150,11 @@ export function EnrollmentsTable({ enrollments }: { enrollments: Enrollment[] })
                 <th className="text-left px-5 py-3.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Nº</th>
                 <th className="text-left px-5 py-3.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Alumno</th>
                 <th className="text-left px-5 py-3.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Curso</th>
-                <th className="text-left px-5 py-3.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Plataforma</th>
+                <th className="text-left px-5 py-3.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Tutor asignado</th>
                 <th className="text-left px-5 py-3.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Estado</th>
-                <th className="text-left px-5 py-3.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Fecha</th>
+                <th className="text-left px-5 py-3.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Fecha alta</th>
+                <th className="text-left px-5 py-3.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Fecha inicio</th>
+                <th className="text-left px-5 py-3.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Fecha fin</th>
                 <th className="w-10" />
               </tr>
             </thead>
@@ -193,19 +174,25 @@ export function EnrollmentsTable({ enrollments }: { enrollments: Enrollment[] })
                         <p className="text-xs text-slate-400 mt-0.5">{e.students?.email ?? ""}</p>
                       </Link>
                     </td>
-                    <td className="px-5 py-3.5 text-slate-700 font-medium text-xs max-w-[200px] truncate">
+                    <td className="px-5 py-3.5 text-slate-700 font-medium text-xs max-w-[180px] truncate">
                       {e.courses?.name ?? "—"}
                     </td>
-                    <td className="px-5 py-3.5 text-xs text-slate-500">
-                      {e.platforms?.name ?? "—"}
+                    <td className="px-5 py-3.5 text-xs text-slate-500 whitespace-nowrap">
+                      {e.tutor?.full_name ?? <span className="text-slate-300">Sin asignar</span>}
                     </td>
                     <td className="px-5 py-3.5">
                       <span className={cn("inline-block text-[11px] font-semibold px-2.5 py-1 rounded-full", s.cls)}>
                         {s.label}
                       </span>
                     </td>
-                    <td className="px-5 py-3.5 text-xs text-slate-400 font-medium">
+                    <td className="px-5 py-3.5 text-xs text-slate-400 font-medium whitespace-nowrap">
                       {formatDate(e.enrollment_date)}
+                    </td>
+                    <td className="px-5 py-3.5 text-xs text-slate-400 font-medium whitespace-nowrap">
+                      {e.start_date ? formatDate(e.start_date) : <span className="text-slate-300">—</span>}
+                    </td>
+                    <td className="px-5 py-3.5 text-xs text-slate-400 font-medium whitespace-nowrap">
+                      {e.end_date ? formatDate(e.end_date) : <span className="text-slate-300">—</span>}
                     </td>
                     <td className="pr-4">
                       <Link href={`/enrollments/${e.id}`}>
