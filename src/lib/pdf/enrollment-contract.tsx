@@ -48,6 +48,10 @@ export type EnrollmentContractData = {
     name: string;
     duration_hours: number | null;
   } | null;
+  formation: {
+    name: string;
+    courses: string[];
+  } | null;
   platform: string | null;
   contract: {
     amount: number;
@@ -217,6 +221,8 @@ export function EnrollmentContractPDF({ data }: { data: EnrollmentContractData }
   const ct = data.contract;
   const paymentLines = buildPaymentLines(ct);
 
+  const fm = data.formation;
+
   const duracion =
     co?.duration_hours != null
       ? `${co.duration_hours} horas`
@@ -273,7 +279,14 @@ export function EnrollmentContractPDF({ data }: { data: EnrollmentContractData }
         <Text style={s.field}>Correo electrónico:  {st?.email ?? ""}</Text>
 
         <Text style={s.sectionTitle}>3. Datos del curso</Text>
-        <Text style={s.field}>Nombre del curso:  {co?.name ?? ""}</Text>
+        {fm ? (
+          <>
+            <Text style={s.field}>Formación:  {fm.name}</Text>
+            <Text style={s.field}>Cursos incluidos:  {fm.courses.join(" · ")}</Text>
+          </>
+        ) : (
+          <Text style={s.field}>Nombre del curso:  {co?.name ?? ""}</Text>
+        )}
         <Text style={s.field}>Modalidad:  Formación online</Text>
         {duracion ? <Text style={s.field}>Duración:  {duracion}</Text> : null}
         {data.end_date ? <Text style={s.field}>Fecha de finalización:  {fmtDate(data.end_date)}</Text> : null}

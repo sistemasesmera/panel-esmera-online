@@ -6,20 +6,22 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 export async function createEnrollmentFromStudent(
   studentId: string,
-  courseId: string,
+  courseId: string | null,
   amount: number,
   paymentType: "contado" | "financiado",
   paymentOption: string,
   durationMonths: number | null = null,
   platformId: string | null = null,
   tutorId: string | null = null,
+  formationId: string | null = null,
+  courseTutors: Record<string, string | null> | null = null,
 ): Promise<{ success: true; enrollmentNumber: number; enrollmentId: string } | { error: string }> {
   const user = await requireCapability("manageEnrollments");
   const db = createAdminClient() as any;
 
-  if (!courseId)           return { error: "Selecciona un curso" };
-  if (!amount || amount <= 0) return { error: "El importe debe ser mayor que 0" };
-  if (!paymentOption)      return { error: "Selecciona el método de pago" };
+  if (!courseId && !formationId) return { error: "Selecciona un curso o formación" };
+  if (!amount || amount <= 0)    return { error: "El importe debe ser mayor que 0" };
+  if (!paymentOption)            return { error: "Selecciona el método de pago" };
 
   // 1. Create enrollment
   const { data: enrollment, error: enrollErr } = await db
@@ -27,6 +29,7 @@ export async function createEnrollmentFromStudent(
     .insert({
       student_id:      studentId,
       course_id:       courseId,
+      formation_id:    formationId,
       status:          "pendiente_firma",
       origin:          "manual",
       assigned_to:     user.id,
@@ -40,7 +43,17 @@ export async function createEnrollmentFromStudent(
   if (enrollErr) return { error: `Error al crear matrícula: ${enrollErr.message}` };
   const { id: enrollmentId, enrollment_number } = enrollment as { id: string; enrollment_number: number };
 
-  // 2. Create contract
+  // 2. Per-course tutors for formation enrollments
+  if (formationId && courseTutors && Object.keys(courseTutors).length > 0) {
+    const tutorRows = Object.entries(courseTutors)
+      .filter(([, tid]) => tid)
+      .map(([cid, tid]) => ({ enrollment_id: enrollmentId, course_id: cid, tutor_id: tid }));
+    if (tutorRows.length > 0) {
+      await db.from("enrollment_course_tutors").insert(tutorRows).then(() => {}, () => {});
+    }
+  }
+
+  // 3. Create contract
   const { error: contractErr } = await db.from("contracts").insert({
     enrollment_id:   enrollmentId,
     amount,
@@ -54,7 +67,7 @@ export async function createEnrollmentFromStudent(
 
   if (contractErr) return { error: `Error al crear contrato: ${contractErr.message}` };
 
-  // 3. Activity log
+  // 4. Activity log
   await db.from("activity_logs").insert({
     user_id:     user.id,
     action:      "enrollment.created",

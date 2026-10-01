@@ -25,6 +25,7 @@ export type LeadProfile = {
   temperatura:          Temperatura | null;
   frase_clave:          string | null;
   curso_interes_id:     string | null;
+  curso_interes:        string | null;
   importe_previsto:     number | null;
 };
 

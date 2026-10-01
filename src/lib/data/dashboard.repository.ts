@@ -60,7 +60,7 @@ export async function getExpiringEnrollments(tutorId?: string): Promise<Expiring
 
   let query = db
     .from("enrollments")
-    .select("id, enrollment_number, end_date, students(full_name), courses(name)")
+    .select("id, enrollment_number, end_date, students(full_name), courses!course_id(name)")
     .eq("status", "en_curso")
     .is("deleted_at", null)
     .not("end_date", "is", null)

@@ -108,6 +108,7 @@ export async function upsertLeadProfile(
     temperatura?:         string | null;
     frase_clave?:         string;
     curso_interes_id?:    string | null;
+    curso_interes?:       string | null;
     importe_previsto?:    number | null;
   },
   oppId?: string,
@@ -152,7 +153,9 @@ export async function generateEnrollment(
   contactId:           string,
   contact:             { name: string; email: string; phone: string | null },
   dni:                 string | null,
-  courseId:            string,
+  courseId:            string | null,
+  formationId:         string | null,
+  courseTutors:        Record<string, string | null> | null,
   amount:              number,
   paymentType:         "contado" | "financiado",
   paymentOption:       string,
@@ -165,9 +168,9 @@ export async function generateEnrollment(
   const user = await requireAuth();
   const db   = createAdminClient() as any;
 
-  if (!courseId)      return { error: "Selecciona un curso" };
-  if (!amount || amount <= 0) return { error: "El importe debe ser mayor que 0" };
-  if (!paymentOption) return { error: "Selecciona el método de pago" };
+  if (!courseId && !formationId) return { error: "Selecciona un curso o formación" };
+  if (!amount || amount <= 0)   return { error: "El importe debe ser mayor que 0" };
+  if (!paymentOption)           return { error: "Selecciona el método de pago" };
 
   // 1. Find or create student
   let studentId: string;
@@ -218,7 +221,8 @@ export async function generateEnrollment(
     .from("enrollments")
     .insert({
       student_id:         studentId,
-      course_id:          courseId,
+      course_id:          courseId     ?? null,
+      formation_id:       formationId  ?? null,
       status:             "pendiente_firma",
       origin:             "manual",
       ghl_opportunity_id: oppId,
@@ -234,6 +238,16 @@ export async function generateEnrollment(
 
   if (enrollErr) return { error: `Error al crear matrícula: ${enrollErr.message}` };
   const { id: enrollmentId, enrollment_number } = enrollment as { id: string; enrollment_number: number };
+
+  // 3b. Per-course tutors for formation enrollments
+  if (formationId && courseTutors && Object.keys(courseTutors).length) {
+    const rows = Object.entries(courseTutors).map(([cid, tid]) => ({
+      enrollment_id: enrollmentId,
+      course_id:     cid,
+      tutor_id:      tid ?? null,
+    }));
+    await db.from("enrollment_course_tutors").insert(rows).then(() => {}, () => {});
+  }
 
   // 3. Create contract with payment method
   const { error: contractErr } = await db.from("contracts").insert({

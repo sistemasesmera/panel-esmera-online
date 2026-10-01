@@ -64,6 +64,7 @@ export async function POST(
         id, enrollment_number, enrollment_date, start_date, end_date, duration_months,
         students!student_id(full_name, dni_nie, birth_date, email, phone, address, province, postal_code),
         courses!course_id(name, duration_hours),
+        formations!formation_id(name, formation_courses(position, courses!course_id(name))),
         platforms!platform_id(name),
         contracts!enrollment_id(id, status, amount, payment_type, cash_method, cash_amount, financer, financed_amount)
       `)
@@ -84,6 +85,7 @@ export async function POST(
       duration_months: number | null;
       students: { full_name: string; dni_nie: string; birth_date: string | null; email: string; phone: string | null; address: string | null; province: string | null; postal_code: string | null } | null;
       courses: { name: string; duration_hours: number | null } | null;
+      formations: { name: string; formation_courses: Array<{ position: number; courses: { name: string } | null }> } | null;
       platforms: { name: string } | null;
       contracts: Array<{ id: string; status: string; amount: number; payment_type: string | null; cash_method: string | null; cash_amount: number | null; financer: string | null; financed_amount: number | null }>;
     };
@@ -103,6 +105,16 @@ export async function POST(
       logoBase64 = fs.readFileSync(path.join(process.cwd(), "public", "esmera-logo.png")).toString("base64");
     } catch { /* logo opcional */ }
 
+    const formationData = raw.formations
+      ? {
+          name:    raw.formations.name,
+          courses: raw.formations.formation_courses
+            .sort((a, b) => a.position - b.position)
+            .map(fc => fc.courses?.name ?? "")
+            .filter(Boolean),
+        }
+      : null;
+
     const contractData: EnrollmentContractData = {
       enrollment_number: raw.enrollment_number,
       enrollment_date:   raw.enrollment_date,
@@ -111,6 +123,7 @@ export async function POST(
       duration_months:   raw.duration_months,
       student,
       course:            raw.courses ?? null,
+      formation:         formationData,
       platform:          raw.platforms?.name ?? null,
       contract: {
         amount:          contract.amount,
@@ -164,7 +177,7 @@ export async function POST(
           external_id: id,
         }],
         message: {
-          subject: `Firma tu contrato de matrícula — ${raw.courses?.name ?? "Esmera Online"}`,
+          subject: `Firma tu contrato de matrícula — ${raw.formations?.name ?? raw.courses?.name ?? "Esmera Online"}`,
           body:    `Hola ${student.full_name},\n\nTe enviamos el contrato de tu matrícula en Esmera Online para que lo revises y firmes digitalmente.\n\nPulsa el siguiente enlace para acceder al documento:\n\n{{submitter.link}}\n\nSi tienes cualquier duda, contáctanos en info@esmeraonline.com.\n\nEsmera Online`,
         },
       }),

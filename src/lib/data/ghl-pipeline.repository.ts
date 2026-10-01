@@ -2,15 +2,17 @@ import "server-only";
 import {
   fetchGhlPipelines,
   fetchGhlOpportunities,
+  fetchGhlCustomFieldDefs,
   type GhlPipeline,
   type GhlPipelineStage,
   type GhlOpportunity,
+  type GhlCustomFieldDef,
 } from "@/lib/ghl/api";
 import { SETTER_STAGES, CLOSER_STAGES } from "@/lib/domain/shared/permissions";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { AppRole } from "@/lib/domain/shared/permissions";
 
-export type { GhlPipeline, GhlPipelineStage, GhlOpportunity };
+export type { GhlPipeline, GhlPipelineStage, GhlOpportunity, GhlCustomFieldDef };
 
 export type OppEnriched = GhlOpportunity & {
   cursoValue:       string | null;
@@ -25,10 +27,11 @@ export type OppEnriched = GhlOpportunity & {
 };
 
 export type PipelineData = {
-  pipelines:      GhlPipeline[];
-  oppsByPipeline: Record<string, OppEnriched[]>;
-  totalValue:     number;
-  totalOpen:      number;
+  pipelines:          GhlPipeline[];
+  oppsByPipeline:     Record<string, OppEnriched[]>;
+  totalValue:         number;
+  totalOpen:          number;
+  formQuestionDefs:   GhlCustomFieldDef[];
 };
 
 export type PipelineUser = { id: string; role: AppRole };
@@ -107,9 +110,19 @@ async function enrichOpps(
 }
 
 export async function fetchPipelineData(currentUser: PipelineUser): Promise<PipelineData> {
-  const allPipelines = await fetchGhlPipelines();
-
   const defaultPipelineId = process.env.GHL_PIPELINE_ID;
+  const cursoFieldId      = process.env.GHL_CURSO_FIELD_ID       ?? null;
+  const origenFieldId     = process.env.GHL_ORIGEN_LEAD_FIELD_ID ?? null;
+
+  const [allPipelines, allDefs] = await Promise.all([
+    fetchGhlPipelines(),
+    fetchGhlCustomFieldDefs(),
+  ]);
+
+  const systemIds   = new Set([cursoFieldId, origenFieldId].filter(Boolean) as string[]);
+  const systemKeys  = new Set(["contact.curso", "contact.origen_lead"]);
+  const formQuestionDefs = allDefs.filter(d => !systemIds.has(d.id) && !systemKeys.has(d.fieldKey));
+
   const pipelines = defaultPipelineId
     ? allPipelines.filter((p) => p.id === defaultPipelineId)
     : allPipelines;
@@ -127,5 +140,5 @@ export async function fetchPipelineData(currentUser: PipelineUser): Promise<Pipe
   const totalValue     = allOpps.reduce((s, o) => s + (o.monetaryValue ?? 0), 0);
   const totalOpen      = allOpps.filter((o) => o.status === "open").length;
 
-  return { pipelines, oppsByPipeline, totalValue, totalOpen };
+  return { pipelines, oppsByPipeline, totalValue, totalOpen, formQuestionDefs };
 }

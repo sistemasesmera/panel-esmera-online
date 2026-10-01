@@ -43,6 +43,7 @@ export default async function StudentDetailPage({
     { data: courses },
     { data: platforms },
     { data: tutors },
+    { data: formations },
   ] = await Promise.all([
     db.from("students")
       .select("id, full_name, email, phone, dni_nie, province, postal_code, birth_date, created_at, ghl_contact_id")
@@ -69,6 +70,10 @@ export default async function StudentDetailPage({
       .select("id, full_name")
       .eq("role", "tutor")
       .order("full_name"),
+
+    db.from("formations")
+      .select("id, name, formation_courses(course_id, position, courses!course_id(id, name))")
+      .order("name"),
   ]);
 
   if (error || !student) notFound();
@@ -131,6 +136,7 @@ export default async function StudentDetailPage({
           courses={coursesForModal}
           platforms={(platforms ?? []) as { id: string; name: string }[]}
           tutors={(tutors ?? []) as { id: string; full_name: string }[]}
+          formations={(formations ?? []) as any[]}
         />
       </div>
 

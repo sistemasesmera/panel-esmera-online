@@ -90,8 +90,9 @@ export async function POST(req: NextRequest) {
         phone:       phone ?? null,
         email:       email,
       },
-      course:   course ?? null,
-      platform: null,
+      course:    course ?? null,
+      formation: null,
+      platform:  null,
       contract: {
         amount,
         payment_type:    paymentType,

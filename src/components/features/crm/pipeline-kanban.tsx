@@ -1,5 +1,5 @@
 "use client";
-import { useState, useTransition } from "react";
+import { useState, useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { LayoutGrid, List, ArrowRight, GraduationCap, Mail, Clock, CalendarPlus, Flame, Thermometer, Snowflake, Plus } from "lucide-react";
 import { toast } from "sonner";
@@ -416,17 +416,39 @@ function ListView({ opps, onOpen }: { opps: OppEnriched[]; onOpen: (opp: OppEnri
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 type Props = {
-  pipelines:      GhlPipeline[];
-  oppsByPipeline: Record<string, OppEnriched[]>;
-  currentUser:    { id: string; role: string };
+  pipelines:        GhlPipeline[];
+  oppsByPipeline:   Record<string, OppEnriched[]>;
+  formQuestionDefs: Array<{ id: string; name: string }>;
+  currentUser:      { id: string; role: string };
 };
 
-export function PipelineKanban({ pipelines, oppsByPipeline, currentUser }: Props) {
+type SharedData = {
+  courses:   Array<{ id: string; name: string; price: number | null }>;
+  platforms: Array<{ id: string; name: string }>;
+  tutors:    Array<{ id: string; full_name: string }>;
+};
+
+export function PipelineKanban({ pipelines, oppsByPipeline, formQuestionDefs, currentUser }: Props) {
   const router = useRouter();
   const [activePipelineId, setActivePipelineId] = useState(pipelines[0]?.id ?? "");
   const [view, setView]           = useState<"kanban" | "list">("kanban");
   const [sheetOpp, setSheetOpp]   = useState<OppEnriched | null>(null);
   const [newLeadOpen, setNewLeadOpen] = useState(false);
+
+  const [shared, setShared] = useState<SharedData>({ courses: [], platforms: [], tutors: [] });
+  const [formations, setFormations] = useState<Array<{ id: string; name: string; courses: Array<{ course_id: string; position: number; course: { id: string; name: string } }> }>>([]);
+
+  useEffect(() => {
+    Promise.all([
+      fetch("/api/courses").then(r => r.ok ? r.json() : []),
+      fetch("/api/platforms").then(r => r.ok ? r.json() : []),
+      fetch("/api/tutors").then(r => r.ok ? r.json() : []),
+      fetch("/api/formations").then(r => r.ok ? r.json() : []),
+    ]).then(([courses, platforms, tutors, fmts]) => {
+      setShared({ courses, platforms, tutors });
+      setFormations(fmts);
+    }).catch(() => {});
+  }, []);
 
   // ── Drag & drop state ──────────────────────────────────────────────────────
   const [dragId, setDragId]             = useState<string | null>(null);
@@ -641,6 +663,11 @@ export function PipelineKanban({ pipelines, oppsByPipeline, currentUser }: Props
         <LeadSheet
           opp={sheetOpp}
           stages={pipeline?.stages ?? []}
+          formQuestionDefs={formQuestionDefs}
+          courses={shared.courses}
+          platforms={shared.platforms}
+          tutors={shared.tutors}
+          formations={formations}
           currentUser={currentUser}
           onClose={() => setSheetOpp(null)}
           onAction={() => { setSheetOpp(null); router.refresh(); }}

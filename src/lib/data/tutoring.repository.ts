@@ -27,7 +27,7 @@ export async function listTutoringSessions(tutorId?: string): Promise<TutoringRo
   const supabase = await createClient();
   let query = supabase
     .from("tutoring_sessions")
-    .select("id, enrollment_id, session_date, contact_type, notes, duration_minutes, created_at, enrollments(students(full_name), courses(name)), users:tutor_id(full_name)")
+    .select("id, enrollment_id, session_date, contact_type, notes, duration_minutes, created_at, enrollments(students(full_name), courses!course_id(name)), users:tutor_id(full_name)")
     .order("session_date", { ascending: false });
   if (tutorId) query = query.eq("tutor_id", tutorId);
   const { data, error } = await query;
@@ -39,7 +39,7 @@ export async function getActiveEnrollmentsForTutor(userId?: string): Promise<Enr
   const db = createAdminClient() as any;
   let query = db
     .from("enrollments")
-    .select("id, students(full_name), courses(name)")
+    .select("id, students(full_name), courses!course_id(name)")
     .in("status", ["en_curso", "pendiente_firma"])
     .is("deleted_at", null)
     .order("created_at", { ascending: false });
@@ -53,7 +53,7 @@ export async function getSessionsByEnrollment(enrollmentId: string): Promise<Tut
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("tutoring_sessions")
-    .select("id, enrollment_id, session_date, contact_type, notes, duration_minutes, created_at, enrollments(students(full_name), courses(name)), users:tutor_id(full_name)")
+    .select("id, enrollment_id, session_date, contact_type, notes, duration_minutes, created_at, enrollments(students(full_name), courses!course_id(name)), users:tutor_id(full_name)")
     .eq("enrollment_id", enrollmentId)
     .order("session_date", { ascending: false });
   if (error) throw new Error(error.message);

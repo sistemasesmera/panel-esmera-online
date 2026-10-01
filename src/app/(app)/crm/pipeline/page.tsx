@@ -33,6 +33,7 @@ export default async function PipelinePage() {
       <PipelineKanban
         pipelines={data.pipelines}
         oppsByPipeline={data.oppsByPipeline}
+        formQuestionDefs={data.formQuestionDefs}
         currentUser={{ id: currentUser.id, role: currentUser.role }}
       />
     </div>

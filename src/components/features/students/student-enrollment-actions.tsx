@@ -7,6 +7,8 @@ import { NewEnrollmentModal } from "./new-enrollment-modal";
 type Course    = { id: string; name: string; price: number | null };
 type Platform  = { id: string; name: string };
 type Tutor     = { id: string; full_name: string };
+type FormationCourseEntry = { course_id: string; position: number; courses: { id: string; name: string } | null };
+type Formation = { id: string; name: string; formation_courses: FormationCourseEntry[] };
 
 export function StudentEnrollmentActions({
   studentId,
@@ -14,12 +16,14 @@ export function StudentEnrollmentActions({
   courses,
   platforms,
   tutors,
+  formations = [],
 }: {
   studentId:   string;
   studentName: string;
   courses:     Course[];
   platforms:   Platform[];
   tutors:      Tutor[];
+  formations?: Formation[];
 }) {
   const [open, setOpen] = useState(false);
 
@@ -40,6 +44,7 @@ export function StudentEnrollmentActions({
           courses={courses}
           platforms={platforms}
           tutors={tutors}
+          formations={formations}
           onClose={() => setOpen(false)}
         />
       )}

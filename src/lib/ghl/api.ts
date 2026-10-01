@@ -303,6 +303,24 @@ export async function createGhlOpportunity(data: {
   return (json.opportunity ?? json) as GhlOpportunity;
 }
 
+export type GhlCustomFieldDef = {
+  id: string;
+  name: string;
+  fieldKey: string;
+};
+
+export async function fetchGhlCustomFieldDefs(): Promise<GhlCustomFieldDef[]> {
+  const locationId = process.env.GHL_LOCATION_ID;
+  if (!locationId || !process.env.GHL_API_KEY) return [];
+  const res = await fetch(`${GHL_API_BASE}/locations/${locationId}/customFields`, {
+    headers: ghlHeaders(),
+    cache: "no-store",
+  });
+  if (!res.ok) return [];
+  const data = await res.json();
+  return (data.customFields ?? []) as GhlCustomFieldDef[];
+}
+
 export async function fetchGhlUsers(): Promise<Array<{ id: string; name: string; email: string }>> {
   const locationId = process.env.GHL_LOCATION_ID;
   if (!locationId || !process.env.GHL_API_KEY) return [];

@@ -7,7 +7,7 @@ import {
   X, Phone, PhoneMissed, MessageCircle, Mail, FileText,
   Paperclip, Send, Loader2, Download, GraduationCap, User,
   CreditCard, ClipboardList, Flame, Thermometer, Snowflake,
-  BookOpen, Euro, CheckCircle2, Calendar, Pencil,
+  BookOpen, Euro, CheckCircle2, Calendar, Pencil, MessageSquare,
 } from "lucide-react";
 import {
   createLeadActivity,
@@ -33,9 +33,15 @@ import type {
 } from "@/lib/data/lead-profiles.repository";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-type Course   = { id: string; name: string; price: number | null };
-type Platform = { id: string; name: string };
-type Tutor    = { id: string; full_name: string };
+type Course    = { id: string; name: string; price: number | null };
+type Platform  = { id: string; name: string };
+type Tutor     = { id: string; full_name: string };
+type FormationCourseEntry = { course_id: string; position: number; course: { id: string; name: string } };
+type Formation = { id: string; name: string; courses: FormationCourseEntry[] };
+
+export type EnrollmentConfirm =
+  | { type: "course";    courseId: string;    formationId?: never; courseTutors?: never; tutorId: string | null }
+  | { type: "formation"; formationId: string; courseId?: never;    courseTutors: Record<string, string | null>; tutorId?: never };
 
 // ── Activity type config ──────────────────────────────────────────────────────
 type TypeDef = {
@@ -130,7 +136,7 @@ function TempBadge({ t }: { t: Temperatura }) {
 
 // ── Ficha de cualificación modal ──────────────────────────────────────────────
 type FichaFormData = {
-  curso_interes_id:   string | null;
+  curso_interes:      string;
   importe_previsto:   string;
   objetivo:           string;
   horas_semana:       string;
@@ -146,7 +152,7 @@ type FichaFormData = {
 
 function buildFichaForm(p: Partial<LeadProfile>): FichaFormData {
   return {
-    curso_interes_id:   p.curso_interes_id   ?? null,
+    curso_interes:      p.curso_interes      ?? "",
     importe_previsto:   p.importe_previsto != null ? String(p.importe_previsto) : "",
     objetivo:           p.objetivo           ?? "",
     horas_semana:       p.horas_semana       ?? "",
@@ -200,36 +206,16 @@ function FichaModal({
 
         <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
 
-          {/* Curso de interés + Importe */}
-          <div className="grid grid-cols-[1fr_auto] gap-3 items-end p-4 bg-indigo-50 rounded-2xl border border-indigo-100">
-            <div className="flex-1 min-w-0">
-              <label className={labelCls}>Curso de interés</label>
-              <select
-                value={form.curso_interes_id ?? ""}
-                onChange={e => set("curso_interes_id", e.target.value || null)}
-                className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-300 transition-shadow"
-              >
-                <option value="">— Sin seleccionar —</option>
-                {courses.map(c => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-            </div>
-            <div className="w-32">
-              <label className={labelCls}>Importe (€)</label>
-              <div className="relative">
-                <Euro className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
-                <input
-                  type="number"
-                  min="0"
-                  step="50"
-                  value={form.importe_previsto}
-                  onChange={e => set("importe_previsto", e.target.value)}
-                  placeholder="0"
-                  className="w-full text-sm border border-slate-200 rounded-xl pl-8 pr-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-300 transition-shadow"
-                />
-              </div>
-            </div>
+          {/* Curso de interés */}
+          <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100">
+            <label className={labelCls}>Curso de interés</label>
+            <input
+              type="text"
+              value={form.curso_interes}
+              onChange={e => set("curso_interes", e.target.value)}
+              placeholder="Ej: Instagram Pro, Uñas acrílicas…"
+              className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-300 transition-shadow"
+            />
           </div>
 
           {/* Su objetivo */}
@@ -381,21 +367,25 @@ const PAYMENT_OPTIONS: Record<PaymentType, { value: PaymentOption; label: string
 };
 
 function EnrollmentModal({
-  opp, courses, platforms, tutors, initialCourseId, initialAmount, onConfirm, onCancel, pending, error, mode = "enroll",
+  opp, courses, formations, platforms, tutors, initialCourseId, initialAmount, onConfirm, onCancel, pending, error, mode = "enroll",
 }: {
   opp:             OppEnriched;
   courses:         Course[];
+  formations:      Formation[];
   platforms:       Platform[];
   tutors:          Tutor[];
   initialCourseId: string | null;
   initialAmount:   number | null;
-  onConfirm:       (courseId: string, amount: number, paymentType: PaymentType, paymentOption: PaymentOption, durationMonths: number | null, platformId: string | null, tutorId: string | null) => void;
+  onConfirm:       (sel: EnrollmentConfirm, amount: number, paymentType: PaymentType, paymentOption: PaymentOption, durationMonths: number | null, platformId: string | null) => void;
   onCancel:        () => void;
   pending:         boolean;
   error:           string | null;
   mode?:           "enroll" | "simulate";
 }) {
+  const [tab,            setTab]            = useState<"course" | "formation">("course");
   const [courseId,       setCourseId]       = useState(initialCourseId ?? "");
+  const [formationId,    setFormationId]    = useState("");
+  const [courseTutors,   setCourseTutors]   = useState<Record<string, string | null>>({});
   const [amount,         setAmount]         = useState(initialAmount != null ? String(initialAmount) : "");
   const [paymentType,    setPaymentType]    = useState<PaymentType | null>(null);
   const [paymentOption,  setPaymentOption]  = useState<PaymentOption | null>(null);
@@ -404,16 +394,21 @@ function EnrollmentModal({
   const [tutorId,        setTutorId]        = useState(() => tutors.length === 1 ? tutors[0].id : "");
   const [localErr,       setLocalErr]       = useState<string | null>(null);
 
-  const selectedCourse = courses.find(c => c.id === courseId);
+  const selectedCourse    = courses.find(c => c.id === courseId);
+  const selectedFormation = formations.find(f => f.id === formationId);
 
   function handleConfirm() {
-    if (!courseId)      { setLocalErr("Selecciona un curso"); return; }
+    if (tab === "course" && !courseId)      { setLocalErr("Selecciona un curso"); return; }
+    if (tab === "formation" && !formationId){ setLocalErr("Selecciona una formación"); return; }
     const n = parseFloat(amount);
     if (!n || n <= 0)   { setLocalErr("Introduce un importe válido"); return; }
     if (!paymentType)   { setLocalErr("Selecciona el método de pago"); return; }
     if (!paymentOption) { setLocalErr("Selecciona la modalidad de pago"); return; }
     setLocalErr(null);
-    onConfirm(courseId, n, paymentType, paymentOption, durationMonths ? parseInt(durationMonths) : null, platformId || null, tutorId || null);
+    const sel: EnrollmentConfirm = tab === "course"
+      ? { type: "course", courseId, tutorId: tutorId || null }
+      : { type: "formation", formationId, courseTutors };
+    onConfirm(sel, n, paymentType, paymentOption, durationMonths ? parseInt(durationMonths) : null, platformId || null);
   }
 
   const labelCls = "block text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1.5";
@@ -449,25 +444,82 @@ function EnrollmentModal({
             </div>
           </div>
 
-          {/* Curso */}
-          <div>
-            <label className={labelCls}>Curso *</label>
-            <select
-              value={courseId}
-              onChange={e => {
-                setCourseId(e.target.value);
-                const c = courses.find(x => x.id === e.target.value);
-                if (c?.price && !amount) setAmount(String(c.price));
-                setLocalErr(null);
-              }}
-              className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-300 transition-shadow"
-            >
-              <option value="">— Seleccionar curso —</option>
-              {courses.map(c => (
-                <option key={c.id} value={c.id}>{c.name}{c.price ? ` · ${formatEur(c.price)}` : ""}</option>
+          {/* Tab Curso / Formación */}
+          {formations.length > 0 && (
+            <div className="flex rounded-xl border border-slate-200 overflow-hidden text-sm font-semibold">
+              {(["course", "formation"] as const).map(t => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => { setTab(t); setLocalErr(null); }}
+                  className={cn(
+                    "cursor-pointer flex-1 py-2 transition-colors",
+                    tab === t
+                      ? "bg-indigo-600 text-white"
+                      : "text-slate-500 hover:bg-slate-50"
+                  )}
+                >
+                  {t === "course" ? "Curso individual" : "Formación"}
+                </button>
               ))}
-            </select>
-          </div>
+            </div>
+          )}
+
+          {/* Selector según tab */}
+          {tab === "course" ? (
+            <div>
+              <label className={labelCls}>Curso *</label>
+              <select
+                value={courseId}
+                onChange={e => {
+                  setCourseId(e.target.value);
+                  const c = courses.find(x => x.id === e.target.value);
+                  if (c?.price && !amount) setAmount(String(c.price));
+                  setLocalErr(null);
+                }}
+                className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-300 transition-shadow"
+              >
+                <option value="">— Seleccionar curso —</option>
+                {courses.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}{c.price ? ` · ${formatEur(c.price)}` : ""}</option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div>
+                <label className={labelCls}>Formación *</label>
+                <select
+                  value={formationId}
+                  onChange={e => { setFormationId(e.target.value); setCourseTutors({}); setLocalErr(null); }}
+                  className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-300 transition-shadow"
+                >
+                  <option value="">— Seleccionar formación —</option>
+                  {formations.map(f => (
+                    <option key={f.id} value={f.id}>{f.name}</option>
+                  ))}
+                </select>
+              </div>
+              {selectedFormation && (
+                <div className="rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 space-y-2">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-violet-500">Cursos incluidos · tutor por curso</p>
+                  {selectedFormation.courses.map(fc => (
+                    <div key={fc.course_id} className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-slate-700 flex-1 truncate">{fc.course.name}</span>
+                      <select
+                        value={courseTutors[fc.course_id] ?? ""}
+                        onChange={e => setCourseTutors(p => ({ ...p, [fc.course_id]: e.target.value || null }))}
+                        className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-violet-400 w-36 shrink-0"
+                      >
+                        <option value="">Sin tutor</option>
+                        {tutors.map(t => <option key={t.id} value={t.id}>{t.full_name}</option>)}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Importe */}
           <div>
@@ -534,8 +586,8 @@ function EnrollmentModal({
             </div>
           )}
 
-          {/* Tutor */}
-          {mode === "enroll" && tutors.length > 0 && (
+          {/* Tutor — solo en curso individual */}
+          {mode === "enroll" && tab === "course" && tutors.length > 0 && (
             <div>
               <label className={labelCls}>Tutor asignado</label>
               <select
@@ -1118,8 +1170,65 @@ function EditContactModal({
   );
 }
 
+// ── FormQuestionsModal ────────────────────────────────────────────────────────
+function FormQuestionsModal({
+  defs, contactFields, onClose,
+}: {
+  defs:          Array<{ id: string; name: string }>;
+  contactFields: Array<{ id: string; value: string }>;
+  onClose:       () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-[2px]">
+      <div className="bg-white w-full sm:rounded-2xl sm:mx-4 sm:max-w-md shadow-2xl animate-slide-up flex flex-col max-h-[80dvh]">
+
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 shrink-0">
+          <div className="flex items-center gap-2">
+            <div className="h-7 w-7 rounded-lg bg-violet-100 flex items-center justify-center">
+              <MessageSquare className="h-3.5 w-3.5 text-violet-600" />
+            </div>
+            <p className="text-sm font-black text-slate-900">Preguntas del formulario</p>
+          </div>
+          <button onClick={onClose} className="cursor-pointer p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+          {defs.map(def => {
+            const field = contactFields.find(f => f.id === def.id);
+            const value = field?.value?.trim() || null;
+            return (
+              <div key={def.id} className={cn(
+                "rounded-xl border px-4 py-3",
+                value ? "border-slate-200 bg-white" : "border-slate-100 bg-slate-50"
+              )}>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">{def.name}</p>
+                {value ? (
+                  <p className="text-sm text-slate-800 leading-snug">{value}</p>
+                ) : (
+                  <p className="text-xs text-slate-300 italic">Sin respuesta</p>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="px-5 py-4 border-t border-slate-100 shrink-0">
+          <button
+            onClick={onClose}
+            className="cursor-pointer w-full text-sm font-semibold px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
+          >
+            Cerrar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── LeadSheet ─────────────────────────────────────────────────────────────────
-type ModalMode = "lost" | "unqualified" | "contract" | "ficha" | "enrollment" | "cita" | "simulate" | "editContact" | "assignSetter" | "assignCloser";
+type ModalMode = "lost" | "unqualified" | "contract" | "ficha" | "enrollment" | "cita" | "simulate" | "editContact" | "assignSetter" | "assignCloser" | "formQuestions";
 
 function findStageId(stages: GhlPipelineStage[], keyword: string): string | undefined {
   const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
@@ -1153,25 +1262,35 @@ function getEnrollmentErrors(opp: OppEnriched, profile: Partial<LeadProfile>): s
 }
 
 export function LeadSheet({
-  opp, onClose, onAction, stages = [], currentUser,
+  opp, onClose, onAction, stages = [], formQuestionDefs = [],
+  courses: coursesProp = [], formations, platforms: platformsProp = [], tutors: tutorsProp = [],
+  currentUser,
 }: {
-  opp:         OppEnriched;
-  onClose:     () => void;
-  onAction?:  () => void;
-  stages?:     GhlPipelineStage[];
-  currentUser: { id: string; role: string };
+  opp:               OppEnriched;
+  onClose:           () => void;
+  onAction?:         () => void;
+  stages?:           GhlPipelineStage[];
+  formQuestionDefs?: Array<{ id: string; name: string }>;
+  courses?:          Array<{ id: string; name: string; price: number | null }>;
+  formations?:       Formation[];
+  platforms?:        Array<{ id: string; name: string }>;
+  tutors?:           Array<{ id: string; full_name: string }>;
+  currentUser:       { id: string; role: string };
 }) {
+  const formations_ = formations ?? [];
   const lostStageId        = findStageId(stages, "perdido");
   const unqualifiedStageId = findStageId(stages, "cualificado");
   const citaStageId        = findStageId(stages, "cita agendada");
   const matriculadoStageId = findStageId(stages, "matriculado");
   const router = useRouter();
-  const [activity,   setActivity]   = useState<LeadNote[]>([]);
-  const [actLoading, setActLoading] = useState(true);
-  const [profile,    setProfile]    = useState<Partial<LeadProfile>>({});
-  const [courses,    setCourses]    = useState<Course[]>([]);
-  const [platforms,  setPlatforms]  = useState<Platform[]>([]);
-  const [tutors,     setTutors]     = useState<Tutor[]>([]);
+  const [activity,      setActivity]      = useState<LeadNote[]>([]);
+  const [actLoading,    setActLoading]    = useState(true);
+  const [profile,       setProfile]       = useState<Partial<LeadProfile>>({});
+  const [contactFields, setContactFields] = useState<Array<{ id: string; value: string }>>([]);
+
+  const courses   = coursesProp;
+  const platforms = platformsProp;
+  const tutors    = tutorsProp;
 
   const [noteType,     setNoteType]     = useState<NoteType>("nota");
   const [content,      setContent]      = useState("");
@@ -1239,35 +1358,19 @@ export function LeadSheet({
     } catch {}
   }, [opp.contact.id, opp.id]);
 
-  const fetchCourses = useCallback(async () => {
+  const fetchContactFields = useCallback(async () => {
     try {
-      const res = await fetch("/api/courses");
-      if (res.ok) setCourses(await res.json());
+      const res = await fetch(`/api/leads/${opp.contact.id}/ghl-fields`);
+      if (res.ok) setContactFields(await res.json());
     } catch {}
-  }, []);
-
-  const fetchPlatforms = useCallback(async () => {
-    try {
-      const res = await fetch("/api/platforms");
-      if (res.ok) setPlatforms(await res.json());
-    } catch {}
-  }, []);
-
-  const fetchTutors = useCallback(async () => {
-    try {
-      const res = await fetch("/api/tutors");
-      if (res.ok) setTutors(await res.json());
-    } catch {}
-  }, []);
+  }, [opp.contact.id]);
 
   useEffect(() => {
     fetchActivity();
     fetchProfile();
-    fetchCourses();
-    fetchPlatforms();
-    fetchTutors();
     fetchEnrollmentStatus();
-  }, [fetchActivity, fetchProfile, fetchCourses, fetchPlatforms, fetchTutors, fetchEnrollmentStatus]);
+    fetchContactFields();
+  }, [fetchActivity, fetchProfile, fetchEnrollmentStatus, fetchContactFields]);
 
   useEffect(() => {
     const h = (e: KeyboardEvent) => { if (e.key === "Escape") { if (modal) setModal(null); else onClose(); } };
@@ -1309,7 +1412,7 @@ export function LeadSheet({
       if (importe)               lines.push(`Importe previsto: ${importe.toLocaleString("es-ES", { style: "currency", currency: "EUR", maximumFractionDigits: 0 })}`);
       const res = await upsertLeadProfile(
         opp.contact.id,
-        { ...data, importe_previsto: importe, curso_interes_id: data.curso_interes_id },
+        { ...data, importe_previsto: importe, curso_interes: data.curso_interes || null },
         opp.id,
         lines.join("\n"),
       );
@@ -1324,13 +1427,12 @@ export function LeadSheet({
   }
 
   function handleGenerateEnrollment(
-    courseId: string,
+    sel: EnrollmentConfirm,
     amount: number,
     paymentType: PaymentType,
     paymentOption: PaymentOption,
     durationMonths: number | null,
     platformId: string | null,
-    tutorId: string | null,
   ) {
     setEnrollErr(null);
     startEnroll(async () => {
@@ -1339,14 +1441,16 @@ export function LeadSheet({
         opp.contact.id,
         { name: opp.contact.name, email: opp.contact.email ?? "", phone: opp.contact.phone },
         profile.dni ?? null,
-        courseId,
+        sel.type === "course" ? sel.courseId : null,
+        sel.type === "formation" ? sel.formationId : null,
+        sel.type === "formation" ? sel.courseTutors : null,
         amount,
         paymentType,
         paymentOption,
         matriculadoStageId,
         durationMonths,
         platformId,
-        tutorId,
+        sel.type === "course" ? sel.tutorId : null,
       );
       if ("error" in res) { setEnrollErr(res.error); return; }
       setEnrollNumber(res.enrollmentNumber);
@@ -1405,14 +1509,14 @@ export function LeadSheet({
   }
 
   async function handleSimulateContract(
-    courseId: string,
+    sel: EnrollmentConfirm,
     amount: number,
     paymentType: PaymentType,
     paymentOption: PaymentOption,
     _durationMonths: number | null,
     _platformId: string | null,
-    _tutorId: string | null,
   ) {
+    const courseId = sel.type === "course" ? sel.courseId : undefined;
     setSimulateErr(null);
     setSimulatePending(true);
     try {
@@ -1484,7 +1588,7 @@ export function LeadSheet({
     });
   }
 
-  const interestCourse = courses.find(c => c.id === profile.curso_interes_id);
+  const interestCourse = profile.curso_interes ?? null;
 
   const stageCls = {
     setter: "bg-sky-50 text-sky-700 ring-1 ring-sky-200/60",
@@ -1533,9 +1637,10 @@ export function LeadSheet({
           <EnrollmentModal
             opp={opp}
             courses={courses}
+            formations={formations_}
             platforms={platforms}
             tutors={tutors}
-            initialCourseId={profile.curso_interes_id ?? null}
+            initialCourseId={null}
             initialAmount={profile.importe_previsto ?? null}
             pending={enrollPending}
             error={enrollErr}
@@ -1561,6 +1666,13 @@ export function LeadSheet({
             onCancel={() => { setModal(null); setEditContactErr(null); }}
           />
         )}
+        {modal === "formQuestions" && (
+          <FormQuestionsModal
+            defs={formQuestionDefs}
+            contactFields={contactFields}
+            onClose={() => setModal(null)}
+          />
+        )}
         {(modal === "assignSetter" || modal === "assignCloser") && (
           <AssignMemberModal
             role={modal === "assignSetter" ? "setter" : "closer"}
@@ -1574,9 +1686,10 @@ export function LeadSheet({
           <EnrollmentModal
             opp={opp}
             courses={courses}
+            formations={formations_}
             platforms={platforms}
             tutors={tutors}
-            initialCourseId={profile.curso_interes_id ?? null}
+            initialCourseId={null}
             initialAmount={profile.importe_previsto ?? null}
             pending={simulatePending}
             error={simulateErr}
@@ -1665,22 +1778,14 @@ export function LeadSheet({
 
         {/* ── Curso + importe — destacado ── */}
         {interestCourse && (
-          <div className="mx-5 mt-3 mb-1 shrink-0 bg-emerald-50 border border-emerald-200 rounded-2xl px-4 py-3 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="h-8 w-8 rounded-xl bg-emerald-100 flex items-center justify-center shrink-0">
-                <GraduationCap className="h-4 w-4 text-emerald-600" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-600">Curso de interés</p>
-                <p className="text-sm font-black text-emerald-900 truncate">{interestCourse.name}</p>
-              </div>
+          <div className="mx-5 mt-3 mb-1 shrink-0 bg-emerald-50 border border-emerald-200 rounded-2xl px-4 py-3 flex items-center gap-2.5">
+            <div className="h-8 w-8 rounded-xl bg-emerald-100 flex items-center justify-center shrink-0">
+              <GraduationCap className="h-4 w-4 text-emerald-600" />
             </div>
-            {profile.importe_previsto != null && (
-              <div className="shrink-0 text-right">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-600">Importe</p>
-                <p className="text-xl font-black text-emerald-700">{formatEur(profile.importe_previsto)}</p>
-              </div>
-            )}
+            <div className="min-w-0">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-600">Curso de interés</p>
+              <p className="text-sm font-black text-emerald-900 truncate">{interestCourse}</p>
+            </div>
           </div>
         )}
 
@@ -1844,6 +1949,19 @@ export function LeadSheet({
                   <FileText className="h-3.5 w-3.5" />
                   Simular contrato
                 </button>
+
+                {formQuestionDefs.length > 0 && (
+                  <button
+                    onClick={() => setModal("formQuestions")}
+                    className="cursor-pointer inline-flex items-center gap-1.5 text-xs font-semibold text-violet-600 hover:text-violet-800 bg-violet-50 hover:bg-violet-100 px-3 py-2 rounded-xl border border-violet-200 hover:border-violet-300 transition-colors"
+                  >
+                    <MessageSquare className="h-3.5 w-3.5" />
+                    Preguntas del formulario
+                    {contactFields.some(f => formQuestionDefs.some(d => d.id === f.id) && f.value?.trim()) && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-violet-500 inline-block ml-0.5" />
+                    )}
+                  </button>
+                )}
 
                 <button
                   onClick={() => { setModal("lost"); setCloseErr(null); }}

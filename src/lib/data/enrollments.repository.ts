@@ -16,7 +16,7 @@ export type EnrollmentRow = {
   tutor: { full_name: string } | null;
 };
 
-const ENROLLMENT_SELECT = "id, enrollment_number, status, enrollment_date, start_date, end_date, created_at, students(full_name, email), courses(name), platforms(name), tutor:users!tutor_id(full_name)";
+const ENROLLMENT_SELECT = "id, enrollment_number, status, enrollment_date, start_date, end_date, created_at, students(full_name, email), courses!course_id(name), platforms(name), tutor:users!tutor_id(full_name)";
 
 export async function listEnrollments(): Promise<EnrollmentRow[]> {
   const supabase = await createClient();

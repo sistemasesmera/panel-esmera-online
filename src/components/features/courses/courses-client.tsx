@@ -1,10 +1,12 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Plus, BookOpen, Clock, Euro, CheckCircle, XCircle, ExternalLink, Pencil } from "lucide-react";
-import { toggleCourseActive } from "@/app/(app)/courses/actions";
+import { Plus, BookOpen, Clock, Euro, CheckCircle, XCircle, ExternalLink, Pencil, Layers, Trash2 } from "lucide-react";
+import { toggleCourseActive, deleteFormation } from "@/app/(app)/courses/actions";
 import { CourseDialog } from "./course-dialog";
+import { FormationDialog } from "./formation-dialog";
 import type { Course } from "@/lib/data/courses.repository";
+import type { Formation } from "@/lib/data/formations.repository";
 import { cn, fmt } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 
@@ -20,10 +22,18 @@ const CATEGORY_COLORS: Record<string, string> = {
   "Diseño gráfico y Web":            "bg-cyan-100 text-cyan-700",
 };
 
-export function CoursesClient({ courses, readOnly = false }: { courses: Course[]; readOnly?: boolean }) {
+export function CoursesClient({
+  courses, formations = [], readOnly = false,
+}: {
+  courses:    Course[];
+  formations?: Formation[];
+  readOnly?:  boolean;
+}) {
   const router = useRouter();
-  const [dialog, setDialog] = useState<{ open: boolean; course?: Course }>({ open: false });
-  const [toggling, startToggle] = useTransition();
+  const [dialog,          setDialog]          = useState<{ open: boolean; course?: Course }>({ open: false });
+  const [formationDialog, setFormationDialog] = useState<{ open: boolean; formation?: Formation }>({ open: false });
+  const [toggling,        startToggle]        = useTransition();
+  const [deleting,        startDelete]        = useTransition();
 
   const grouped: Record<string, Course[]> = {};
   for (const c of courses) {
@@ -44,26 +54,101 @@ export function CoursesClient({ courses, readOnly = false }: { courses: Course[]
     router.refresh();
   }
 
+  function handleFormationClose() {
+    setFormationDialog({ open: false });
+    router.refresh();
+  }
+
+  function handleDeleteFormation(id: string) {
+    if (!confirm("¿Eliminar esta formación? Los contratos existentes no se verán afectados.")) return;
+    startDelete(async () => {
+      await deleteFormation(id);
+      router.refresh();
+    });
+  }
+
   return (
     <>
       {/* Header */}
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-black tracking-tight">Cursos</h1>
+          <h1 className="text-2xl font-black tracking-tight">Cursos y Formaciones</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {courses.length} cursos · {Object.keys(grouped).length} categorías
+            {courses.length} cursos · {formations.length} formaciones
           </p>
         </div>
         {!readOnly && (
-          <button
-            onClick={() => setDialog({ open: true })}
-            className="cursor-pointer inline-flex items-center gap-2 bg-indigo-600 text-white text-sm font-semibold px-4 py-2.5 rounded-lg hover:bg-indigo-700 transition-colors"
-          >
-            <Plus className="h-4 w-4" />
-            Nuevo curso
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setFormationDialog({ open: true })}
+              className="cursor-pointer inline-flex items-center gap-2 bg-violet-600 text-white text-sm font-semibold px-4 py-2.5 rounded-lg hover:bg-violet-700 transition-colors"
+            >
+              <Layers className="h-4 w-4" />
+              Nueva formación
+            </button>
+            <button
+              onClick={() => setDialog({ open: true })}
+              className="cursor-pointer inline-flex items-center gap-2 bg-indigo-600 text-white text-sm font-semibold px-4 py-2.5 rounded-lg hover:bg-indigo-700 transition-colors"
+            >
+              <Plus className="h-4 w-4" />
+              Nuevo curso
+            </button>
+          </div>
         )}
       </div>
+
+      {/* Formaciones */}
+      {formations.length > 0 && (
+        <div className="mb-8">
+          <div className="flex items-center gap-3 mb-3">
+            <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-violet-100 text-violet-700">
+              Formaciones
+            </span>
+            <span className="text-xs text-slate-400">{formations.length} formaciones</span>
+          </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {formations.map(f => (
+              <div key={f.id} className="bg-white rounded-xl border border-violet-200 p-5 card-shadow">
+                <div className="flex items-start justify-between gap-2 mb-3">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="h-8 w-8 rounded-lg bg-violet-50 flex items-center justify-center shrink-0">
+                      <Layers className="h-3.5 w-3.5 text-violet-600" />
+                    </div>
+                  </div>
+                  {!readOnly && (
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={() => setFormationDialog({ open: true, formation: f })}
+                        className="cursor-pointer p-1 text-slate-300 hover:text-indigo-600 transition-colors"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteFormation(f.id)}
+                        disabled={deleting}
+                        className="cursor-pointer p-1 text-slate-300 hover:text-red-500 transition-colors"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <h3 className="font-bold text-slate-900 text-sm mb-2">{f.name}</h3>
+                <div className="space-y-1">
+                  {f.courses.map((fc, i) => (
+                    <div key={fc.course_id} className="flex items-center gap-2 text-xs text-slate-500">
+                      <span className="h-4 w-4 rounded-full bg-violet-100 text-violet-600 text-[10px] font-bold flex items-center justify-center shrink-0">
+                        {i + 1}
+                      </span>
+                      {fc.course.name}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {courses.length === 0 ? (
         <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
@@ -180,11 +265,14 @@ export function CoursesClient({ courses, readOnly = false }: { courses: Course[]
         </div>
       )}
 
-      {/* Dialog */}
       {dialog.open && (
-        <CourseDialog
-          course={dialog.course}
-          onClose={handleClose}
+        <CourseDialog course={dialog.course} onClose={handleClose} />
+      )}
+      {formationDialog.open && (
+        <FormationDialog
+          formation={formationDialog.formation}
+          courses={courses}
+          onClose={handleFormationClose}
         />
       )}
     </>

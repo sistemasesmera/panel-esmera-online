@@ -85,6 +85,66 @@ export async function toggleCourseActive(id: string, active: boolean) {
   return { success: true };
 }
 
+// ── Formations ────────────────────────────────────────────────────────────────
+
+export async function createFormation(
+  name: string,
+  courseIds: string[],
+): Promise<{ success: true; id: string } | { error: string }> {
+  await requireCapability("manageCourses");
+  const db = createAdminClient() as any;
+
+  const { data, error } = await db
+    .from("formations")
+    .insert({ name: name.trim() })
+    .select("id")
+    .single();
+  if (error) return { error: error.message };
+
+  const formationId = (data as { id: string }).id;
+
+  if (courseIds.length) {
+    const rows = courseIds.map((courseId, i) => ({ formation_id: formationId, course_id: courseId, position: i }));
+    const { error: fcErr } = await db.from("formation_courses").insert(rows);
+    if (fcErr) return { error: fcErr.message };
+  }
+
+  revalidatePath("/courses");
+  return { success: true, id: formationId };
+}
+
+export async function updateFormation(
+  id: string,
+  name: string,
+  courseIds: string[],
+): Promise<{ success: true } | { error: string }> {
+  await requireCapability("manageCourses");
+  const db = createAdminClient() as any;
+
+  const { error } = await db.from("formations").update({ name: name.trim(), updated_at: new Date().toISOString() }).eq("id", id);
+  if (error) return { error: error.message };
+
+  await db.from("formation_courses").delete().eq("formation_id", id);
+
+  if (courseIds.length) {
+    const rows = courseIds.map((courseId, i) => ({ formation_id: id, course_id: courseId, position: i }));
+    const { error: fcErr } = await db.from("formation_courses").insert(rows);
+    if (fcErr) return { error: fcErr.message };
+  }
+
+  revalidatePath("/courses");
+  return { success: true };
+}
+
+export async function deleteFormation(id: string): Promise<{ success: true } | { error: string }> {
+  await requireCapability("manageCourses");
+  const db = createAdminClient() as any;
+  const { error } = await db.from("formations").delete().eq("id", id);
+  if (error) return { error: error.message };
+  revalidatePath("/courses");
+  return { success: true };
+}
+
 // ── Upload dossier to Supabase Storage ───────────────────────────────────────
 async function uploadDossier(courseId: string, fd: FormData): Promise<string | null> {
   const file = fd.get("dossier") as File | null;
