@@ -41,24 +41,31 @@ export async function moveOppToStage(
   return { success: true };
 }
 
+async function checkLeadOwnership(db: any, contactId: string, userId: string, role: string): Promise<boolean> {
+  if (role === "administracion") return true;
+  const { data } = await db.from("lead_profiles")
+    .select("setter_id, closer_id")
+    .eq("ghl_contact_id", contactId)
+    .maybeSingle();
+  return data?.setter_id === userId || data?.closer_id === userId;
+}
+
 export async function markLeadAsUnqualified(
   oppId: string,
   contactId: string,
   reason: UnqualifiedReason,
   stageId?: string,
 ) {
-  await requireCapability("viewPipeline");
-  const user = await requireAuth();
+  const user = await requireCapability("viewPipeline");
   const db = createAdminClient() as any;
+
+  const allowed = await checkLeadOwnership(db, contactId, user.id, user.role);
+  if (!allowed) return { error: "No tienes permiso para modificar este lead" };
 
   const reasonLabel = UNQUALIFIED_REASONS.find(r => r.value === reason)?.label ?? reason;
 
   if (stageId) {
-    try {
-      await updateGhlOpportunity(oppId, { pipelineStageId: stageId });
-    } catch (err: any) {
-      return { error: `Error al mover etapa en GHL: ${err.message}` };
-    }
+    try { await updateGhlOpportunity(oppId, { pipelineStageId: stageId }); } catch { /* non-blocking */ }
   }
 
   const { error: noteErr } = await db.from("lead_notes").insert({
@@ -79,18 +86,16 @@ export async function markLeadAsLost(
   reason: LostReason,
   stageId?: string,
 ) {
-  await requireCapability("viewPipeline");
-  const user = await requireAuth();
+  const user = await requireCapability("viewPipeline");
   const db = createAdminClient() as any;
+
+  const allowed = await checkLeadOwnership(db, contactId, user.id, user.role);
+  if (!allowed) return { error: "No tienes permiso para modificar este lead" };
 
   const reasonLabel = LOST_REASONS.find(r => r.value === reason)?.label ?? reason;
 
   if (stageId) {
-    try {
-      await updateGhlOpportunity(oppId, { pipelineStageId: stageId });
-    } catch (err: any) {
-      return { error: `Error al mover etapa en GHL: ${err.message}` };
-    }
+    try { await updateGhlOpportunity(oppId, { pipelineStageId: stageId }); } catch { /* non-blocking */ }
   }
 
   const { error: noteErr } = await db.from("lead_notes").insert({
