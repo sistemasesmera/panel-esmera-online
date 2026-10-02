@@ -3,12 +3,14 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 import {
   LayoutDashboard, Kanban, GraduationCap, BookOpen,
-  BookMarked, ScrollText, Settings, LogOut, CalendarCheck, CalendarDays,
+  BookMarked, ScrollText, Settings, LogOut, CalendarCheck, CalendarDays, Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { AppRole } from "@/lib/domain/shared/permissions";
+import { AutomationsDrawer } from "./automations-drawer";
 
 type NavItem  = { label: string; href: string; icon: React.ComponentType<{ className?: string }>; roles?: AppRole[] };
 type NavGroup = { label?: string; items: NavItem[] };
@@ -72,8 +74,10 @@ export function AppSidebar({
   signOut:  () => Promise<void>;
 }) {
   const pathname = usePathname();
+  const [automationsOpen, setAutomationsOpen] = useState(false);
 
   return (
+    <>
     <aside
       className="flex h-full w-60 flex-col shrink-0 select-none"
       style={{ background: "var(--sb-bg)", borderRight: "1px solid var(--sb-border)" }}
@@ -128,6 +132,23 @@ export function AppSidebar({
         })}
       </nav>
 
+      {/* ── Automations trigger (admin only) ── */}
+      {role === "administracion" && (
+        <div className="px-3 pb-1 shrink-0">
+          <button
+            onClick={() => setAutomationsOpen(true)}
+            title="Automatizaciones"
+            className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-[11px] font-medium transition-colors"
+            style={{ color: "var(--sb-muted)" }}
+            onMouseEnter={e => (e.currentTarget.style.color = "var(--sb-fg)")}
+            onMouseLeave={e => (e.currentTarget.style.color = "var(--sb-muted)")}
+          >
+            <Zap className="h-3 w-3 shrink-0" />
+            <span>Automatizaciones</span>
+          </button>
+        </div>
+      )}
+
       {/* ── User ── */}
       <div className="px-3 py-3 shrink-0" style={{ borderTop: "1px solid var(--sb-border)" }}>
         {/* User card */}
@@ -162,5 +183,8 @@ export function AppSidebar({
         </form>
       </div>
     </aside>
+
+    <AutomationsDrawer open={automationsOpen} onClose={() => setAutomationsOpen(false)} />
+    </>
   );
 }
