@@ -429,6 +429,11 @@ export async function createLeadActivity(fd: FormData) {
   if (!NOTE_TYPES.includes(type as any)) return { error: "Tipo de actividad no válido" };
   if (!content && files.length === 0) return { error: "Añade un texto o al menos un adjunto" };
 
+  const MAX = 20 * 1024 * 1024;
+  for (const f of files) {
+    if (f.size > MAX) return { error: `"${f.name}" supera el límite de 20 MB` };
+  }
+
   // Auto-label attachment-only notes
   const finalContent = !content && files.length > 0
     ? `📎 ${files.map(f => f.name).join(", ")}`
