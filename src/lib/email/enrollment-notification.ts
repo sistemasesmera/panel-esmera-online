@@ -8,34 +8,26 @@ export async function sendEnrollmentNotification({
   enrollmentId,
   studentName,
   courseName,
-  amount,
-  paymentType,
-  paymentOption,
   recipientEmails,
 }: {
   enrollmentNumber: number;
   enrollmentId:     string;
   studentName:      string;
   courseName:       string;
-  amount:           number;
-  paymentType:      "contado" | "financiado";
-  paymentOption:    string;
   recipientEmails:  string[];
 }) {
   if (!process.env.RESEND_API_KEY) return;
   const unique = [...new Set(recipientEmails.filter(Boolean))];
   if (!unique.length) return;
 
-  const from      = process.env.RESEND_FROM_EMAIL ?? "Esmera Online <noreply@esmeraschool.com>";
-  const appUrl    = process.env.NEXT_PUBLIC_APP_URL ?? "";
-  const url       = `${appUrl}/enrollments/${enrollmentId}`;
-  const amountFmt = amount.toLocaleString("es-ES", { style: "currency", currency: "EUR" });
-  const pagoFmt   = paymentType === "contado" ? `Contado · ${paymentOption}` : `Financiado · ${paymentOption}`;
+  const from   = process.env.RESEND_FROM_EMAIL ?? "Esmera Online <info@esmeraonline.com>";
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const url    = `${appUrl}/enrollments/${enrollmentId}`;
 
   await resend.emails.send({
     from,
     to: unique,
-    subject: `🎉 Contrato firmado · Matrícula #${enrollmentNumber} — ${studentName}`,
+    subject: `Contrato firmado · Matrícula #${enrollmentNumber} — ${studentName}`,
     html: `
 <!DOCTYPE html>
 <html lang="es">
@@ -48,28 +40,26 @@ export async function sendEnrollmentNotification({
         <tr>
           <td style="background:linear-gradient(135deg,#1ab5c0,#0a8a94);padding:28px 32px;">
             <p style="margin:0;color:#fff;font-size:13px;font-weight:600;opacity:.85;letter-spacing:.04em;text-transform:uppercase;">Esmera Online · Panel</p>
-            <h1 style="margin:6px 0 0;color:#fff;font-size:22px;font-weight:700;">🎉 Contrato firmado — Matrícula activa</h1>
+            <h1 style="margin:6px 0 0;color:#fff;font-size:22px;font-weight:700;">Contrato firmado — Matrícula activa</h1>
           </td>
         </tr>
 
         <tr>
-          <td style="padding:28px 32px 20px;">
+          <td style="padding:28px 32px 12px;">
             <p style="margin:0 0 20px;font-size:15px;color:#1e293b;">
-              El alumno ha firmado el contrato. La matrícula <strong>#${enrollmentNumber}</strong> está activa:
+              El alumno ha firmado el contrato. Por favor, <strong>contacta con él para comenzar</strong>.
             </p>
             <table width="100%" cellpadding="0" cellspacing="0">
-              ${row("Alumno",  studentName)}
-              ${row("Curso",   courseName)}
-              ${row("Importe", amountFmt)}
-              ${row("Pago",    pagoFmt)}
+              ${row("Alumno", studentName)}
+              ${row("Curso",  courseName)}
             </table>
           </td>
         </tr>
 
         <tr>
-          <td style="padding:0 32px 28px;">
+          <td style="padding:16px 32px 28px;">
             <a href="${url}" style="display:inline-block;background:#1ab5c0;color:#fff;font-size:13px;font-weight:700;padding:12px 24px;border-radius:8px;text-decoration:none;">
-              Ver matrícula en el panel →
+              Ver matrícula en el panel
             </a>
           </td>
         </tr>
