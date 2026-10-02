@@ -42,9 +42,9 @@ const AUTOMATIONS: Automation[] = [
   {
     title:   "Nueva matrícula → Email de notificación",
     trigger: "Se genera una nueva matrícula en el panel",
-    action:  "GHL envía un email automático al comercial asignado, al tutor y a los administradores",
-    system:  "GHL",
-    status:  "pendiente",
+    action:  "El panel envía automáticamente un email al comercial asignado, al tutor y a todos los administradores con los datos de la matrícula",
+    system:  "Panel",
+    status:  "activa",
   },
 ];
 
@@ -84,7 +84,7 @@ export function AutomationsDrawer({ open, onClose }: { open: boolean; onClose: (
         {/* Content */}
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-6">
           <Section title="Panel" items={panel} />
-          <Section title="GoHighLevel (GHL)" items={ghl} />
+          {ghl.length > 0 && <Section title="GoHighLevel (GHL)" items={ghl} />}
         </div>
       </div>
     </>

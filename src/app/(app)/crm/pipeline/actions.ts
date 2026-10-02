@@ -7,6 +7,7 @@ import { updateGhlOpportunity, updateGhlContact, createGhlContact, createGhlOppo
 import { normalizePhone } from "@/lib/utils/phone";
 import type { NoteType } from "@/lib/data/lead-notes.repository";
 import { LOST_REASONS, type LostReason, UNQUALIFIED_REASONS, type UnqualifiedReason } from "@/lib/domain/crm/lead-status";
+import { sendEnrollmentNotification } from "@/lib/email/enrollment-notification";
 
 export async function moveOppToStage(
   oppId:         string,
@@ -329,6 +330,20 @@ export async function generateEnrollment(
     content:            `✅ Matrícula #${enrollment_number} generada.\nAlumno: ${contact.name}\nImporte: ${amount.toLocaleString("es-ES", { style: "currency", currency: "EUR" })}\nPago: ${paymentType === "contado" ? "Contado" : "Financiado"} · ${paymentOption}`,
     created_by:         user.id,
   });
+
+  // 6b. Send email notification to commercial, tutor and admins (non-blocking)
+  notifyEnrollmentCreated(db, {
+    enrollmentNumber: enrollment_number,
+    enrollmentId,
+    contactId,
+    tutorId:     tutorId     ?? null,
+    courseId:    courseId    ?? null,
+    formationId: formationId ?? null,
+    studentName: contact.name,
+    amount,
+    paymentType,
+    paymentOption,
+  }).catch(() => {});
 
   return { success: true, enrollmentNumber: enrollment_number, enrollmentId };
 }
@@ -742,4 +757,61 @@ export async function updateLeadContactInfo(
   } catch (err: any) {
     return { error: err.message ?? "Error al actualizar el contacto" };
   }
+}
+
+async function notifyEnrollmentCreated(db: any, params: {
+  enrollmentNumber: number;
+  enrollmentId:     string;
+  contactId:        string;
+  tutorId:          string | null;
+  courseId:         string | null;
+  formationId:      string | null;
+  studentName:      string;
+  amount:           number;
+  paymentType:      "contado" | "financiado";
+  paymentOption:    string;
+}) {
+  const { enrollmentNumber, enrollmentId, contactId, tutorId, courseId, formationId, studentName, amount, paymentType, paymentOption } = params;
+
+  // Resolve course/formation name
+  let courseName = "—";
+  if (courseId) {
+    const { data } = await db.from("courses").select("name").eq("id", courseId).maybeSingle();
+    if (data?.name) courseName = data.name;
+  } else if (formationId) {
+    const { data } = await db.from("formations").select("name").eq("id", formationId).maybeSingle();
+    if (data?.name) courseName = data.name;
+  }
+
+  // Resolve recipient emails
+  const emailSet = new Set<string>();
+
+  // Admins
+  const { data: admins } = await db.from("users").select("email").eq("role", "administracion");
+  for (const u of admins ?? []) if (u.email) emailSet.add(u.email);
+
+  // Tutor
+  if (tutorId) {
+    const { data: tutor } = await db.from("users").select("email").eq("id", tutorId).maybeSingle();
+    if (tutor?.email) emailSet.add(tutor.email);
+  }
+
+  // Setter / closer
+  const { data: lp } = await db.from("lead_profiles").select("setter_id, closer_id").eq("ghl_contact_id", contactId).maybeSingle();
+  const commercialIds = [lp?.setter_id, lp?.closer_id].filter(Boolean) as string[];
+  if (commercialIds.length) {
+    const { data: commercials } = await db.from("users").select("email").in("id", commercialIds);
+    for (const u of commercials ?? []) if (u.email) emailSet.add(u.email);
+  }
+
+  await sendEnrollmentNotification({
+    enrollmentNumber,
+    enrollmentId,
+    studentName,
+    courseName,
+    amount,
+    paymentType,
+    paymentOption,
+    recipientEmails: [...emailSet],
+  });
 }
