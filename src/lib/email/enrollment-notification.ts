@@ -47,7 +47,7 @@ export async function sendEnrollmentNotification({
         <tr>
           <td style="padding:28px 32px 12px;">
             <p style="margin:0 0 20px;font-size:15px;color:#1e293b;">
-              El alumno ha firmado el contrato. Por favor, <strong>contacta con él para comenzar</strong>.
+              El alumno ha firmado el contrato y la matrícula está activa. Por favor, <strong>verifica la matrícula en el panel y procede con el protocolo de tutorías</strong>.
             </p>
             <table width="100%" cellpadding="0" cellspacing="0">
               ${row("Alumno", studentName)}
