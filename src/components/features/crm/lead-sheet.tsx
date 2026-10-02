@@ -1300,7 +1300,16 @@ export function LeadSheet({
   const [attaching,        setAttaching]        = useState(false);
   const [showAttachments,  setShowAttachments]  = useState(false);
   const [deletingAttId,    setDeletingAttId]    = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef           = useRef<HTMLInputElement>(null);
+  const advancedToContactando  = useRef(false);
+
+  function getContactandoStageId(): string {
+    if (advancedToContactando.current) return "";
+    const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+    const currentName = stages.find(s => s.id === opp.pipelineStageId)?.name ?? "";
+    if (!norm(currentName).includes("nuevo")) return "";
+    return stages.find(s => norm(s.name).includes("contactando"))?.id ?? "";
+  }
 
   const [modal,              setModal]             = useState<ModalMode | null>(null);
   const [closeErr,           setCloseErr]           = useState<string | null>(null);
@@ -1559,15 +1568,16 @@ export function LeadSheet({
     setAttaching(true);
     for (const file of picked) {
       const fd = new FormData();
-      fd.append("contactId", opp.contact.id);
-      fd.append("oppId",     opp.id);
-      fd.append("type",      "nota");
-      fd.append("content",   "");
-      fd.append("files",     file);
+      fd.append("contactId",          opp.contact.id);
+      fd.append("oppId",              opp.id);
+      fd.append("type",               "nota");
+      fd.append("content",            "");
+      fd.append("contactandoStageId", getContactandoStageId());
+      fd.append("files",              file);
       try {
         const res = await createLeadActivity(fd);
         if (res.error) toast.error(`Error al adjuntar ${file.name}: ${res.error}`);
-        else           toast.success(`✓ ${file.name} adjuntado`);
+        else { toast.success(`✓ ${file.name} adjuntado`); advancedToContactando.current = true; }
       } catch {
         toast.error(`Error al adjuntar ${file.name}`);
       }
@@ -1596,13 +1606,15 @@ export function LeadSheet({
     if (!content.trim()) { setFormErr("Escribe algo para guardar"); return; }
     setFormErr(null);
     const fd = new FormData();
-    fd.append("contactId", opp.contact.id);
-    fd.append("oppId",     opp.id);
-    fd.append("type",      noteType);
-    fd.append("content",   content.trim());
+    fd.append("contactId",          opp.contact.id);
+    fd.append("oppId",              opp.id);
+    fd.append("type",               noteType);
+    fd.append("content",            content.trim());
+    fd.append("contactandoStageId", getContactandoStageId());
     startNote(async () => {
       const res = await createLeadActivity(fd);
       if (res.error) { setFormErr(res.error); return; }
+      advancedToContactando.current = true;
       setContent(""); setActLoading(true);
       await fetchActivity();
     });

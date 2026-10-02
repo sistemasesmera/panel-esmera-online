@@ -419,11 +419,12 @@ export async function createLeadActivity(fd: FormData) {
   const db = createAdminClient() as any;
   const supabase = createAdminClient();
 
-  const contactId = (fd.get("contactId") as string)?.trim();
-  const oppId     = (fd.get("oppId")     as string)?.trim() || null;
-  const type      = (fd.get("type")      as string)?.trim() as NoteType;
-  const content   = (fd.get("content")   as string)?.trim() ?? "";
-  const files     = fd.getAll("files") as File[];
+  const contactId           = (fd.get("contactId")           as string)?.trim();
+  const oppId               = (fd.get("oppId")               as string)?.trim() || null;
+  const type                = (fd.get("type")                as string)?.trim() as NoteType;
+  const content             = (fd.get("content")             as string)?.trim() ?? "";
+  const contactandoStageId  = (fd.get("contactandoStageId")  as string)?.trim() || null;
+  const files               = fd.getAll("files") as File[];
 
   if (!contactId) return { error: "contactId requerido" };
   if (!NOTE_TYPES.includes(type as any)) return { error: "Tipo de actividad no válido" };
@@ -493,6 +494,20 @@ export async function createLeadActivity(fd: FormData) {
         created_by:     user.id,
       });
     }
+  }
+
+  // Auto-advance "Lead nuevo" → "Contactando" (non-blocking)
+  if (contactandoStageId && oppId) {
+    try {
+      await updateGhlOpportunity(oppId, { pipelineStageId: contactandoStageId });
+      await db.from("lead_notes").insert({
+        ghl_contact_id:     contactId,
+        ghl_opportunity_id: oppId,
+        type:               "nota",
+        content:            "📍 Etapa cambiada: Lead nuevo → Contactando",
+        created_by:         user.id,
+      });
+    } catch { /* no bloquea si GHL falla */ }
   }
 
   return { success: true };
