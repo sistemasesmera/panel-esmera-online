@@ -5,7 +5,11 @@ import { useRouter } from "next/navigation";
 import { Paperclip, Upload, Trash2, FileText, Image, FileArchive, File, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { formatDate } from "@/lib/utils";
-import { uploadEnrollmentAttachment, deleteEnrollmentAttachment } from "@/app/(app)/enrollments/[id]/actions";
+import {
+  uploadEnrollmentAttachment,
+  deleteEnrollmentAttachment,
+  deleteLeadAttachmentFromEnrollment,
+} from "@/app/(app)/enrollments/[id]/actions";
 
 export type AttachmentRow = {
   id: string;
@@ -62,11 +66,13 @@ export function EnrollmentAttachmentsPanel({
     if (ok > 0) router.refresh();
   }
 
-  function handleDelete(id: string, path: string) {
+  function handleDelete(id: string, path: string, inherited: boolean) {
     if (!confirm("¿Eliminar este adjunto?")) return;
     setDeletingId(id);
     startTransition(async () => {
-      const res = await deleteEnrollmentAttachment(enrollmentId, id, path);
+      const res = inherited
+        ? await deleteLeadAttachmentFromEnrollment(enrollmentId, id, path || null)
+        : await deleteEnrollmentAttachment(enrollmentId, id, path);
       setDeletingId(null);
       if ("error" in res) toast.error(res.error);
       else toast.success("Adjunto eliminado");
@@ -144,15 +150,13 @@ export function EnrollmentAttachmentsPanel({
                     Ver
                   </a>
                 )}
-                {!att.inherited && (
-                  <button
-                    onClick={() => handleDelete(att.id, att.file_path)}
-                    disabled={deletingId === att.id || isPending}
-                    className="rounded p-1 text-slate-200 opacity-0 group-hover:opacity-100 hover:text-red-400 hover:bg-red-50 transition-all disabled:opacity-40"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                )}
+                <button
+                  onClick={() => handleDelete(att.id, att.file_path, att.inherited ?? false)}
+                  disabled={deletingId === att.id || isPending}
+                  className="rounded p-1 text-slate-200 opacity-0 group-hover:opacity-100 hover:text-red-400 hover:bg-red-50 transition-all disabled:opacity-40"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
               </li>
             );
           })}

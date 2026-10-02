@@ -466,7 +466,13 @@ export async function createLeadActivity(fd: FormData) {
           upsert: false,
         });
 
-      if (upErr) { console.error("[lead attachment upload]", upErr.message); continue; }
+      if (upErr) {
+        // Rollback the auto-generated note if there was no text content
+        if (!content) {
+          await db.from("lead_notes").delete().eq("id", noteId);
+        }
+        return { error: `Error al subir ${file.name}: ${upErr.message}` };
+      }
 
       const { data: signed } = await supabase.storage
         .from(BUCKET)
@@ -477,11 +483,43 @@ export async function createLeadActivity(fd: FormData) {
         note_id:        noteId,
         file_name:      file.name,
         file_url:       signed?.signedUrl ?? path,
+        file_path:      path,
         file_size:      file.size,
         created_by:     user.id,
       });
     }
   }
+
+  return { success: true };
+}
+
+export async function deleteLeadAttachment(
+  attachmentId: string,
+  filePath: string | null,
+  contactId: string,
+): Promise<{ success: true } | { error: string }> {
+  const user = await requireCapability("viewPipeline");
+  const db      = createAdminClient() as any;
+  const supabase = createAdminClient();
+
+  if (filePath) {
+    await supabase.storage.from(BUCKET).remove([filePath]);
+  }
+
+  const { error } = await db
+    .from("lead_attachments")
+    .delete()
+    .eq("id", attachmentId);
+
+  if (error) return { error: error.message };
+
+  await db.from("activity_logs").insert({
+    user_id:     user.id,
+    action:      "lead.attachment_deleted",
+    entity_type: "lead",
+    entity_id:   contactId,
+    details:     { attachment_id: attachmentId },
+  });
 
   return { success: true };
 }

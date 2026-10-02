@@ -7,6 +7,7 @@ export type LeadAttachment = {
   id: string;
   file_name: string;
   file_url: string;
+  file_path: string | null;
   file_size: number | null;
   created_at: string;
 };
@@ -30,7 +31,7 @@ export async function getLeadActivity(contactId: string): Promise<LeadNote[]> {
     .select(`
       id, ghl_contact_id, ghl_opportunity_id, type, content, created_at,
       users ( full_name ),
-      lead_attachments ( id, file_name, file_url, file_size, created_at )
+      lead_attachments ( id, file_name, file_url, file_path, file_size, created_at )
     `)
     .eq("ghl_contact_id", contactId)
     .order("created_at", { ascending: false });

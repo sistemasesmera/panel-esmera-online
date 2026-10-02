@@ -78,7 +78,7 @@ export default async function EnrollmentDetailPage({
     getSessionsByEnrollment(id),
 
     db.from("lead_attachments")
-      .select("id, file_name, file_url, file_size, created_at")
+      .select("id, file_name, file_url, file_path, file_size, created_at")
       .eq("enrollment_id", id)
       .order("created_at", { ascending: false }),
   ]);
@@ -137,7 +137,7 @@ export default async function EnrollmentDetailPage({
   const inheritedAttachments = (leadAttachmentsRaw ?? []).map((att: any) => ({
     id:         att.id,
     file_name:  att.file_name,
-    file_path:  "",
+    file_path:  att.file_path ?? "",
     file_size:  att.file_size,
     created_at: att.created_at,
     signed_url: att.file_url ?? null,

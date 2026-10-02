@@ -180,6 +180,37 @@ export async function uploadEnrollmentAttachment(
   return { success: true };
 }
 
+export async function deleteLeadAttachmentFromEnrollment(
+  enrollmentId: string,
+  attachmentId: string,
+  filePath: string | null,
+): Promise<ActionResult> {
+  const user = await requireCapability("manageEnrollments");
+  const db    = createAdminClient() as any;
+
+  if (filePath) {
+    await db.storage.from("lead-files").remove([filePath]);
+  }
+
+  const { error } = await db
+    .from("lead_attachments")
+    .delete()
+    .eq("id", attachmentId);
+
+  if (error) return { error: error.message };
+
+  await db.from("activity_logs").insert({
+    user_id:     user.id,
+    action:      "enrollment.lead_attachment_deleted",
+    entity_type: "enrollment",
+    entity_id:   enrollmentId,
+    details:     { attachment_id: attachmentId },
+  });
+
+  revalidatePath(`/enrollments/${enrollmentId}`);
+  return { success: true };
+}
+
 export async function deleteEnrollmentAttachment(
   enrollmentId: string,
   attachmentId: string,

@@ -7,10 +7,11 @@ import {
   X, Phone, PhoneMissed, MessageCircle, Mail, FileText,
   Paperclip, Send, Loader2, Download, GraduationCap, User,
   CreditCard, ClipboardList, Flame, Thermometer, Snowflake,
-  BookOpen, Euro, CheckCircle2, Calendar, Pencil, MessageSquare,
+  BookOpen, Euro, CheckCircle2, Calendar, Pencil, MessageSquare, Trash2,
 } from "lucide-react";
 import {
   createLeadActivity,
+  deleteLeadAttachment,
   markLeadAsLost,
   markLeadAsUnqualified,
   upsertLeadProfile,
@@ -1298,6 +1299,7 @@ export function LeadSheet({
   const [pending,      startNote]       = useTransition();
   const [attaching,        setAttaching]        = useState(false);
   const [showAttachments,  setShowAttachments]  = useState(false);
+  const [deletingAttId,    setDeletingAttId]    = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [modal,              setModal]             = useState<ModalMode | null>(null);
@@ -1562,13 +1564,31 @@ export function LeadSheet({
       fd.append("type",      "nota");
       fd.append("content",   "");
       fd.append("files",     file);
-      const res = await createLeadActivity(fd);
-      if (res.error) toast.error(`Error al adjuntar ${file.name}: ${res.error}`);
-      else           toast.success(`✓ ${file.name} adjuntado`);
+      try {
+        const res = await createLeadActivity(fd);
+        if (res.error) toast.error(`Error al adjuntar ${file.name}: ${res.error}`);
+        else           toast.success(`✓ ${file.name} adjuntado`);
+      } catch {
+        toast.error(`Error al adjuntar ${file.name}`);
+      }
     }
     setAttaching(false);
     setActLoading(true);
     await fetchActivity();
+  }
+
+  async function handleDeleteLeadAtt(attId: string, filePath: string | null) {
+    if (!confirm("¿Eliminar este adjunto?")) return;
+    setDeletingAttId(attId);
+    try {
+      const res = await deleteLeadAttachment(attId, filePath, opp.contact.id);
+      if ("error" in res) toast.error(res.error);
+      else { toast.success("Adjunto eliminado"); setActLoading(true); await fetchActivity(); }
+    } catch {
+      toast.error("Error al eliminar el adjunto");
+    } finally {
+      setDeletingAttId(null);
+    }
   }
 
   function handleSubmitNote(e: React.FormEvent) {
@@ -2101,7 +2121,7 @@ export function LeadSheet({
                 ) : (
                   <ul className="divide-y divide-indigo-100">
                     {allAtts.map(att => (
-                      <li key={att.id} className="flex items-center gap-2.5 px-3 py-2 hover:bg-indigo-50 transition-colors">
+                      <li key={att.id} className="flex items-center gap-2.5 px-3 py-2 hover:bg-indigo-50 transition-colors group">
                         <Paperclip className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
                         <span className="flex-1 min-w-0 text-xs text-slate-700 truncate">{att.file_name}</span>
                         {att.file_size && (
@@ -2116,6 +2136,17 @@ export function LeadSheet({
                           <Download className="h-3 w-3" />
                           Ver
                         </a>
+                        <button
+                          onClick={() => handleDeleteLeadAtt(att.id, att.file_path ?? null)}
+                          disabled={deletingAttId === att.id}
+                          className="rounded p-1 text-slate-300 opacity-0 group-hover:opacity-100 hover:text-red-400 hover:bg-red-50 transition-all disabled:opacity-40"
+                          title="Eliminar adjunto"
+                        >
+                          {deletingAttId === att.id
+                            ? <Loader2 className="h-3 w-3 animate-spin" />
+                            : <Trash2 className="h-3 w-3" />
+                          }
+                        </button>
                       </li>
                     ))}
                   </ul>
