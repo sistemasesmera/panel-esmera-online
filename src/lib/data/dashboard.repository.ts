@@ -41,12 +41,13 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     supabase.from("students").select("*", { count: "exact", head: true }).is("deleted_at", null),
     supabase.from("enrollments").select("*", { count: "exact", head: true }).eq("status", "en_curso").is("deleted_at", null),
     supabase.from("enrollments").select("*", { count: "exact", head: true }).eq("status", "pendiente_firma").is("deleted_at", null),
-    supabase.from("contracts").select("amount").eq("status", "firmado").gte("signed_at", monthStart) as unknown as Promise<{ data: Array<{ amount: number }> | null; error: unknown }>,
+    supabase.from("contracts").select("amount, enrollments!enrollment_id(status)").eq("status", "firmado").gte("signed_at", monthStart) as unknown as Promise<{ data: Array<{ amount: number; enrollments: { status: string } | null }> | null; error: unknown }>,
     supabase.from("courses").select("*", { count: "exact", head: true }).eq("active", true),
   ]);
 
-  const revenueThisMonth = (signedContracts ?? []).reduce((s, c) => s + (c.amount ?? 0), 0);
-  const signedContractsThisMonth = signedContracts?.length ?? 0;
+  const activeContracts = (signedContracts ?? []).filter(c => c.enrollments?.status !== "cancelada");
+  const revenueThisMonth = activeContracts.reduce((s, c) => s + (c.amount ?? 0), 0);
+  const signedContractsThisMonth = activeContracts.length;
 
   return {
     totalStudents: totalStudents ?? 0,
@@ -65,16 +66,17 @@ export async function getCloserSalesThisMonth(closerId?: string): Promise<Closer
 
   const { data, error } = await db
     .from("contracts")
-    .select("amount, enrollments!enrollment_id(closer_id, closer_name)")
+    .select("amount, enrollments!enrollment_id(closer_id, closer_name, status)")
     .eq("status", "firmado")
     .gte("signed_at", monthStart);
 
   if (error) throw new Error(error.message);
 
   const map = new Map<string, CloserSales>();
-  for (const c of (data ?? []) as Array<{ amount: number; enrollments: { closer_id: string | null; closer_name: string | null } | null }>) {
+  for (const c of (data ?? []) as Array<{ amount: number; enrollments: { closer_id: string | null; closer_name: string | null; status: string | null } | null }>) {
     const enr = c.enrollments;
     if (!enr?.closer_name) continue;
+    if (enr.status === "cancelada") continue;
     if (closerId && enr.closer_id !== closerId) continue;
 
     const key = enr.closer_id ?? enr.closer_name;
