@@ -1263,13 +1263,14 @@ function getEnrollmentErrors(opp: OppEnriched, profile: Partial<LeadProfile>): s
 }
 
 export function LeadSheet({
-  opp, onClose, onAction, stages = [], formQuestionDefs = [],
+  opp, onClose, onAction, onStageChange, stages = [], formQuestionDefs = [],
   courses: coursesProp = [], formations, platforms: platformsProp = [], tutors: tutorsProp = [],
   currentUser,
 }: {
   opp:               OppEnriched;
   onClose:           () => void;
   onAction?:         () => void;
+  onStageChange?:    (oppId: string, newStageId: string, newStageName: string) => void;
   stages?:           GhlPipelineStage[];
   formQuestionDefs?: Array<{ id: string; name: string }>;
   courses?:          Array<{ id: string; name: string; price: number | null }>;
@@ -1576,8 +1577,15 @@ export function LeadSheet({
       fd.append("files",              file);
       try {
         const res = await createLeadActivity(fd);
-        if (res.error) toast.error(`Error al adjuntar ${file.name}: ${res.error}`);
-        else { toast.success(`✓ ${file.name} adjuntado`); advancedToContactando.current = true; }
+        if ("error" in res) toast.error(`Error al adjuntar ${file.name}: ${res.error}`);
+        else {
+          toast.success(`✓ ${file.name} adjuntado`);
+          advancedToContactando.current = true;
+          if (res.newStageId) {
+            const newStageName = stages.find(s => s.id === res.newStageId)?.name ?? "";
+            onStageChange?.(opp.id, res.newStageId, newStageName);
+          }
+        }
       } catch {
         toast.error(`Error al adjuntar ${file.name}`);
       }
@@ -1613,8 +1621,12 @@ export function LeadSheet({
     fd.append("contactandoStageId", getContactandoStageId());
     startNote(async () => {
       const res = await createLeadActivity(fd);
-      if (res.error) { setFormErr(res.error); return; }
+      if ("error" in res) { setFormErr(res.error); return; }
       advancedToContactando.current = true;
+      if (res.newStageId) {
+        const newStageName = stages.find(s => s.id === res.newStageId)?.name ?? "";
+        onStageChange?.(opp.id, res.newStageId, newStageName);
+      }
       setContent(""); setActLoading(true);
       await fetchActivity();
     });

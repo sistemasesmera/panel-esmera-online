@@ -671,6 +671,13 @@ export function PipelineKanban({ pipelines, oppsByPipeline, formQuestionDefs, cu
           currentUser={currentUser}
           onClose={() => setSheetOpp(null)}
           onAction={() => { setSheetOpp(null); router.refresh(); }}
+          onStageChange={(oppId, newStageId, newStageName) => {
+            setStageOverrides(p => ({ ...p, [oppId]: newStageId }));
+            setSheetOpp(prev => prev?.id === oppId
+              ? { ...prev, pipelineStageId: newStageId, pipelineStageName: newStageName }
+              : prev
+            );
+          }}
         />
       )}
 

@@ -497,9 +497,11 @@ export async function createLeadActivity(fd: FormData) {
   }
 
   // Auto-advance "Lead nuevo" → "Contactando" (non-blocking)
+  let advancedStageId: string | undefined;
   if (contactandoStageId && oppId) {
     try {
       await updateGhlOpportunity(oppId, { pipelineStageId: contactandoStageId });
+      advancedStageId = contactandoStageId;
       await db.from("lead_notes").insert({
         ghl_contact_id:     contactId,
         ghl_opportunity_id: oppId,
@@ -510,7 +512,7 @@ export async function createLeadActivity(fd: FormData) {
     } catch { /* no bloquea si GHL falla */ }
   }
 
-  return { success: true };
+  return { success: true, newStageId: advancedStageId };
 }
 
 export async function deleteLeadAttachment(
