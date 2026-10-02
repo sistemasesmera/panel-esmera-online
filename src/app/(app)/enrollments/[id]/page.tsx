@@ -11,6 +11,7 @@ import { EnrollmentAttachmentsPanel }  from "@/components/features/enrollments/e
 import { EnrollmentTutoringPanel }     from "@/components/features/enrollments/enrollment-tutoring-panel";
 import { EnrollmentActivityPanel }     from "@/components/features/enrollments/enrollment-activity-panel";
 import { EnrollmentStatusActions }     from "@/components/features/enrollments/enrollment-status-actions";
+import { ResendNotificationButton }    from "@/components/features/enrollments/resend-notification-button";
 import { getSessionsByEnrollment }     from "@/lib/data/tutoring.repository";
 
 export const metadata: Metadata = { title: "Detalle de matrícula" };
@@ -27,7 +28,7 @@ export default async function EnrollmentDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireCapability("viewEnrollments");
+  const currentUser = await requireCapability("viewEnrollments");
   const { id } = await params;
   const db = createAdminClient() as any;
 
@@ -180,6 +181,9 @@ export default async function EnrollmentDetailPage({
           <span className={cn("text-xs font-semibold px-2.5 py-1 rounded-full", st.cls)}>
             {st.label}
           </span>
+          {currentUser.role === "administracion" && (
+            <ResendNotificationButton enrollmentId={enrollment.id} />
+          )}
           <EnrollmentStatusActions
             enrollmentId={enrollment.id}
             currentStatus={enrollment.status}

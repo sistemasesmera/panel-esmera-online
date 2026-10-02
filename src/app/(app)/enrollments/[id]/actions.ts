@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireCapability } from "@/lib/auth/require-role";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { notifyEnrollmentSigned } from "@/lib/email/notify-enrollment";
 
 type ActionResult = { error: string } | { success: true };
 
@@ -238,4 +239,17 @@ export async function deleteEnrollmentAttachment(
 
   revalidatePath(`/enrollments/${enrollmentId}`);
   return { success: true };
+}
+
+// ── Resend enrollment notification ───────────────────────────────────────────
+
+export async function resendEnrollmentNotification(enrollmentId: string): Promise<ActionResult> {
+  await requireCapability("manageUsers");
+  const db = createAdminClient() as any;
+  try {
+    await notifyEnrollmentSigned(db, enrollmentId);
+    return { success: true };
+  } catch (err: any) {
+    return { error: err.message ?? "Error al reenviar el email" };
+  }
 }
