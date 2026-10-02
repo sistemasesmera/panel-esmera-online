@@ -181,7 +181,7 @@ export default async function EnrollmentDetailPage({
           <span className={cn("text-xs font-semibold px-2.5 py-1 rounded-full", st.cls)}>
             {st.label}
           </span>
-          {currentUser.role === "administracion" && (
+          {currentUser.role === "administracion" && contract?.status === "firmado" && (
             <ResendNotificationButton enrollmentId={enrollment.id} />
           )}
           <EnrollmentStatusActions
