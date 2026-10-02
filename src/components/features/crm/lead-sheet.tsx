@@ -1404,10 +1404,16 @@ export function LeadSheet({
   function handleCloseConfirm(reason: string) {
     setCloseErr(null);
     startClose(async () => {
-      const res = modal === "lost"
+      const isLost = modal === "lost";
+      const targetStageId = isLost ? lostStageId : unqualifiedStageId;
+      const res = isLost
         ? await markLeadAsLost(opp.id, opp.contact.id, reason as LostReason, lostStageId)
         : await markLeadAsUnqualified(opp.id, opp.contact.id, reason as UnqualifiedReason, unqualifiedStageId);
       if (res.error) { setCloseErr(res.error); return; }
+      if (targetStageId) {
+        const newStageName = stages.find(s => s.id === targetStageId)?.name ?? "";
+        onStageChange?.(opp.id, targetStageId, newStageName);
+      }
       onAction?.(); onClose();
     });
   }

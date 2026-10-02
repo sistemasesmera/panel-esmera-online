@@ -45,13 +45,21 @@ export async function markLeadAsUnqualified(
   oppId: string,
   contactId: string,
   reason: UnqualifiedReason,
-  _stageId?: string  // unused — status managed in CRM only, not GHL
+  stageId?: string,
 ) {
   await requireCapability("viewPipeline");
   const user = await requireAuth();
   const db = createAdminClient() as any;
 
   const reasonLabel = UNQUALIFIED_REASONS.find(r => r.value === reason)?.label ?? reason;
+
+  if (stageId) {
+    try {
+      await updateGhlOpportunity(oppId, { pipelineStageId: stageId });
+    } catch (err: any) {
+      return { error: `Error al mover etapa en GHL: ${err.message}` };
+    }
+  }
 
   const { error: noteErr } = await db.from("lead_notes").insert({
     ghl_contact_id:     contactId,
@@ -69,13 +77,21 @@ export async function markLeadAsLost(
   oppId: string,
   contactId: string,
   reason: LostReason,
-  _stageId?: string  // unused — status managed in CRM only, not GHL
+  stageId?: string,
 ) {
   await requireCapability("viewPipeline");
   const user = await requireAuth();
   const db = createAdminClient() as any;
 
   const reasonLabel = LOST_REASONS.find(r => r.value === reason)?.label ?? reason;
+
+  if (stageId) {
+    try {
+      await updateGhlOpportunity(oppId, { pipelineStageId: stageId });
+    } catch (err: any) {
+      return { error: `Error al mover etapa en GHL: ${err.message}` };
+    }
+  }
 
   const { error: noteErr } = await db.from("lead_notes").insert({
     ghl_contact_id:     contactId,
