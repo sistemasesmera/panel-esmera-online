@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import { GraduationCap, BookMarked, Clock, FileCheck, Banknote, BookOpen, AlertTriangle } from "lucide-react";
+import { GraduationCap, BookMarked, Clock, FileCheck, Banknote, BookOpen, AlertTriangle, TrendingUp } from "lucide-react";
 import Link from "next/link";
 import { requireAuth } from "@/lib/auth/require-role";
-import { getDashboardStats, getExpiringEnrollments, type ExpiringEnrollment } from "@/lib/data/dashboard.repository";
+import { getDashboardStats, getExpiringEnrollments, getCloserSalesThisMonth, type ExpiringEnrollment, type CloserSales } from "@/lib/data/dashboard.repository";
 import { ROLE_LABELS } from "@/lib/domain/shared/permissions";
 import { fmt, formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
@@ -38,10 +38,12 @@ function KpiCard({ title, value, icon: Icon, accent, bgAccent, sub }: KpiCardPro
 
 export default async function DashboardPage() {
   const user = await requireAuth();
-  const showExpiring = user.role === "administracion" || user.role === "tutor";
-  const [stats, expiring] = await Promise.all([
+  const showExpiring     = user.role === "administracion" || user.role === "tutor";
+  const showCloserSales  = user.role === "administracion" || user.role === "closer";
+  const [stats, expiring, closerSales] = await Promise.all([
     getDashboardStats(),
-    showExpiring ? getExpiringEnrollments(user.role === "tutor" ? user.id : undefined) : Promise.resolve([]),
+    showExpiring     ? getExpiringEnrollments(user.role === "tutor" ? user.id : undefined) : Promise.resolve([]),
+    showCloserSales  ? getCloserSalesThisMonth(user.role === "closer" ? user.id : undefined) : Promise.resolve([]),
   ]);
   const firstName = user.fullName.split(" ")[0];
   const monthName = new Date().toLocaleDateString("es-ES", { month: "long", year: "numeric" });
@@ -115,6 +117,82 @@ export default async function DashboardPage() {
           />
         </div>
       </section>
+
+      {/* Closer sales ranking */}
+      {showCloserSales && (
+        <section>
+          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+            <TrendingUp className="h-3.5 w-3.5 text-violet-500" />
+            Ventas por closer — {monthName.charAt(0).toUpperCase() + monthName.slice(1)}
+          </p>
+
+          {user.role === "closer" ? (
+            /* Closer: own KPI card */
+            <div className="grid grid-cols-2 gap-4 max-w-sm">
+              <KpiCard
+                title="Ventas cerradas"
+                value={closerSales[0]?.count ?? 0}
+                icon={TrendingUp}
+                accent="#7c3aed"
+                bgAccent="#f5f3ff"
+                sub="Este mes"
+              />
+              <KpiCard
+                title="Importe cerrado"
+                value={fmt(closerSales[0]?.total ?? 0)}
+                icon={Banknote}
+                accent="#059669"
+                bgAccent="#ecfdf5"
+                sub="Este mes"
+              />
+            </div>
+          ) : (
+            /* Administración: full ranking */
+            <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden card-shadow">
+              {closerSales.length === 0 ? (
+                <p className="px-5 py-8 text-sm text-slate-400 text-center">
+                  Sin ventas registradas este mes.
+                </p>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-100 bg-slate-50/80">
+                      <th className="text-left px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">#</th>
+                      <th className="text-left px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">Closer</th>
+                      <th className="text-right px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">Ventas</th>
+                      <th className="text-right px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">Importe total</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {(closerSales as CloserSales[]).map((row, i) => (
+                      <tr key={row.closer_id ?? row.closer_name} className="hover:bg-slate-50 transition-colors">
+                        <td className="px-5 py-3">
+                          <span className={cn(
+                            "inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-black",
+                            i === 0 && "bg-violet-100 text-violet-700",
+                            i === 1 && "bg-slate-100 text-slate-600",
+                            i === 2 && "bg-amber-100 text-amber-700",
+                            i  > 2 && "bg-slate-50 text-slate-400",
+                          )}>
+                            {i + 1}
+                          </span>
+                        </td>
+                        <td className="px-5 py-3 font-semibold text-slate-800">{row.closer_name}</td>
+                        <td className="px-5 py-3 text-right">
+                          <span className="inline-flex items-center justify-center h-6 min-w-[2rem] px-2 rounded-full bg-violet-50 text-violet-700 text-xs font-bold">
+                            {row.count}
+                          </span>
+                        </td>
+                        <td className="px-5 py-3 text-right font-bold text-slate-900">{fmt(row.total)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
+        </section>
+      )}
 
       {/* Expiring enrollments */}
       {showExpiring && expiring.length > 0 && (

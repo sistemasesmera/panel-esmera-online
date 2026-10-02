@@ -4,6 +4,29 @@ import { revalidatePath } from "next/cache";
 import { requireCapability } from "@/lib/auth/require-role";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+export async function updateStudentProfile(
+  studentId: string,
+  data: { full_name: string; email: string; phone: string | null; dni_nie: string | null },
+): Promise<{ success: true } | { error: string }> {
+  await requireCapability("manageStudents");
+  const db = createAdminClient() as any;
+
+  const { full_name, email, phone, dni_nie } = data;
+  if (!full_name?.trim()) return { error: "El nombre no puede estar vacío" };
+  if (!email?.trim())     return { error: "El email no puede estar vacío" };
+
+  const { error } = await db
+    .from("students")
+    .update({ full_name: full_name.trim(), email: email.trim(), phone: phone?.trim() || null, dni_nie: dni_nie?.trim() || null })
+    .eq("id", studentId);
+
+  if (error) return { error: `Error al actualizar: ${error.message}` };
+
+  revalidatePath(`/students/${studentId}`);
+  revalidatePath("/students");
+  return { success: true };
+}
+
 export async function createEnrollmentFromStudent(
   studentId: string,
   courseId: string | null,

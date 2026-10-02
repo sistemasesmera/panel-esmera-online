@@ -10,6 +10,13 @@ export type DashboardStats = {
   totalCourses: number;
 };
 
+export type CloserSales = {
+  closer_id:   string | null;
+  closer_name: string;
+  count:       number;
+  total:       number;
+};
+
 export type ExpiringEnrollment = {
   id: string;
   enrollment_number: number;
@@ -49,6 +56,38 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     revenueThisMonth,
     totalCourses: totalCourses ?? 0,
   };
+}
+
+export async function getCloserSalesThisMonth(closerId?: string): Promise<CloserSales[]> {
+  const db = createAdminClient() as any;
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+
+  const { data, error } = await db
+    .from("contracts")
+    .select("amount, enrollments!enrollment_id(closer_id, closer_name)")
+    .eq("status", "firmado")
+    .gte("signed_at", monthStart);
+
+  if (error) throw new Error(error.message);
+
+  const map = new Map<string, CloserSales>();
+  for (const c of (data ?? []) as Array<{ amount: number; enrollments: { closer_id: string | null; closer_name: string | null } | null }>) {
+    const enr = c.enrollments;
+    if (!enr?.closer_name) continue;
+    if (closerId && enr.closer_id !== closerId) continue;
+
+    const key = enr.closer_id ?? enr.closer_name;
+    const existing = map.get(key);
+    if (existing) {
+      existing.count += 1;
+      existing.total += c.amount ?? 0;
+    } else {
+      map.set(key, { closer_id: enr.closer_id, closer_name: enr.closer_name, count: 1, total: c.amount ?? 0 });
+    }
+  }
+
+  return [...map.values()].sort((a, b) => b.total - a.total);
 }
 
 export async function getExpiringEnrollments(tutorId?: string): Promise<ExpiringEnrollment[]> {

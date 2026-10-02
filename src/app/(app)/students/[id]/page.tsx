@@ -6,6 +6,7 @@ import { requireCapability } from "@/lib/auth/require-role";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { cn, formatDate } from "@/lib/utils";
 import { StudentEnrollmentActions } from "@/components/features/students/student-enrollment-actions";
+import { EditStudentModal } from "@/components/features/students/edit-student-modal";
 
 export const metadata: Metadata = { title: "Ficha de alumno" };
 
@@ -213,7 +214,18 @@ export default async function StudentDetailPage({
         {/* RIGHT: student data */}
         <div className="bg-white rounded-xl border border-slate-200 card-shadow p-5 space-y-4">
           <div className="flex items-center justify-between gap-2">
-            <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">Datos del alumno</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">Datos del alumno</h2>
+              <EditStudentModal
+                studentId={student.id}
+                initialData={{
+                  full_name: student.full_name,
+                  email: student.email,
+                  phone: student.phone,
+                  dni_nie: student.dni_nie,
+                }}
+              />
+            </div>
             {(setterName || closerName) && (
               <div className="flex items-center gap-1.5 flex-wrap justify-end">
                 {setterName && (
