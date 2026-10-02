@@ -435,6 +435,10 @@ export function PipelineKanban({ pipelines, oppsByPipeline, formQuestionDefs, cu
   const [sheetOpp, setSheetOpp]   = useState<OppEnriched | null>(null);
   const [newLeadOpen, setNewLeadOpen] = useState(false);
 
+  const [filterStageId, setFilterStageId] = useState("");
+  const [filterCurso,   setFilterCurso]   = useState("");
+  const [filterMember,  setFilterMember]  = useState("");
+
   const [shared, setShared] = useState<SharedData>({ courses: [], platforms: [], tutors: [] });
   const [formations, setFormations] = useState<Array<{ id: string; name: string; courses: Array<{ course_id: string; position: number; course: { id: string; name: string } }> }>>([]);
 
@@ -530,6 +534,21 @@ export function PipelineKanban({ pipelines, oppsByPipeline, formQuestionDefs, cu
     return { ...o, pipelineStageId: newStageId, pipelineStageName: newStageName };
   });
 
+  const cursoOptions  = [...new Set(resolvedOpps.map(o => o.cursoValue).filter(Boolean) as string[])].sort();
+  const memberOptions = [...new Set([
+    ...resolvedOpps.map(o => o.setter_name).filter(Boolean) as string[],
+    ...resolvedOpps.map(o => o.closer_name).filter(Boolean) as string[],
+  ])].sort();
+
+  const filteredOpps = resolvedOpps.filter(o => {
+    if (filterStageId && o.pipelineStageId !== filterStageId) return false;
+    if (filterCurso   && o.cursoValue !== filterCurso)        return false;
+    if (filterMember  && o.setter_name !== filterMember && o.closer_name !== filterMember) return false;
+    return true;
+  });
+
+  const hasFilters = !!(filterStageId || filterCurso || filterMember);
+
   // Build phase → stages map
   const stagesByPhase = PHASES.map(phase => ({
     phase,
@@ -567,6 +586,50 @@ export function PipelineKanban({ pipelines, oppsByPipeline, formQuestionDefs, cu
           Nuevo lead
         </button>
 
+        {/* Filtros lista */}
+        {view === "list" && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <select
+              value={filterStageId}
+              onChange={e => setFilterStageId(e.target.value)}
+              className="text-xs border border-slate-200 rounded-xl px-3 py-2 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+            >
+              <option value="">Todas las etapas</option>
+              {(pipeline?.stages ?? []).map(s => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+            <select
+              value={filterCurso}
+              onChange={e => setFilterCurso(e.target.value)}
+              className="text-xs border border-slate-200 rounded-xl px-3 py-2 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+            >
+              <option value="">Todos los cursos</option>
+              {cursoOptions.map(c => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+            <select
+              value={filterMember}
+              onChange={e => setFilterMember(e.target.value)}
+              className="text-xs border border-slate-200 rounded-xl px-3 py-2 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+            >
+              <option value="">Setter / Closer</option>
+              {memberOptions.map(m => (
+                <option key={m} value={m}>{m}</option>
+              ))}
+            </select>
+            {hasFilters && (
+              <button
+                onClick={() => { setFilterStageId(""); setFilterCurso(""); setFilterMember(""); }}
+                className="cursor-pointer text-xs font-semibold text-slate-400 hover:text-slate-600 px-2 py-2 rounded-xl hover:bg-slate-100 transition-colors"
+              >
+                Limpiar
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Spacer */}
         <div className="flex-1" />
 
@@ -588,7 +651,7 @@ export function PipelineKanban({ pipelines, oppsByPipeline, formQuestionDefs, cu
 
           <div className="flex rounded-xl border border-slate-200 bg-white overflow-hidden">
             <button
-              onClick={() => setView("kanban")}
+              onClick={() => { setView("kanban"); setFilterStageId(""); setFilterCurso(""); setFilterMember(""); }}
               className={cn("cursor-pointer p-2 transition-colors", view === "kanban" ? "bg-indigo-600 text-white" : "text-slate-500 hover:bg-slate-50")}
             >
               <LayoutGrid className="h-4 w-4" />
@@ -656,7 +719,7 @@ export function PipelineKanban({ pipelines, oppsByPipeline, formQuestionDefs, cu
           </div>
         </div>
       ) : (
-        <ListView opps={resolvedOpps} onOpen={setSheetOpp} />
+        <ListView opps={filteredOpps} onOpen={setSheetOpp} />
       )}
 
       {sheetOpp && (
