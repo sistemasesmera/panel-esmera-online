@@ -113,6 +113,7 @@ export async function upsertLeadProfile(
   },
   oppId?: string,
   logMessage?: string,
+  cualificandoStageId?: string,
 ) {
   await requireCapability("viewPipeline");
   const user = await requireAuth();
@@ -145,7 +146,23 @@ export async function upsertLeadProfile(
     } catch { /* non-blocking */ }
   }
 
-  return { success: true };
+  // Auto-advance to Cualificando
+  let advancedStageId: string | undefined;
+  if (cualificandoStageId && oppId) {
+    try {
+      await updateGhlOpportunity(oppId, { pipelineStageId: cualificandoStageId });
+      advancedStageId = cualificandoStageId;
+      await db.from("lead_notes").insert({
+        ghl_contact_id:     contactId,
+        ghl_opportunity_id: oppId,
+        type:               "nota",
+        content:            "📍 Etapa cambiada automáticamente: Cualificando",
+        created_by:         user.id,
+      });
+    } catch { /* non-blocking */ }
+  }
+
+  return { success: true, newStageId: advancedStageId };
 }
 
 export async function generateEnrollment(

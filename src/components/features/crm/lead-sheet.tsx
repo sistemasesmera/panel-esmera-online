@@ -1303,6 +1303,7 @@ export function LeadSheet({
   const [deletingAttId,    setDeletingAttId]    = useState<string | null>(null);
   const fileInputRef           = useRef<HTMLInputElement>(null);
   const advancedToContactando  = useRef(false);
+  const advancedToCualificando = useRef(false);
 
   function getContactandoStageId(): string {
     if (advancedToContactando.current) return "";
@@ -1310,6 +1311,15 @@ export function LeadSheet({
     const currentName = stages.find(s => s.id === opp.pipelineStageId)?.name ?? "";
     if (!norm(currentName).includes("nuevo")) return "";
     return stages.find(s => norm(s.name).includes("contactando"))?.id ?? "";
+  }
+
+  function getCualificandoStageId(): string {
+    if (advancedToCualificando.current) return "";
+    const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+    const currentName = stages.find(s => s.id === opp.pipelineStageId)?.name ?? "";
+    const n = norm(currentName);
+    if (!n.includes("nuevo") && !n.includes("contactando")) return "";
+    return stages.find(s => norm(s.name).includes("cualificando"))?.id ?? "";
   }
 
   const [modal,              setModal]             = useState<ModalMode | null>(null);
@@ -1427,8 +1437,14 @@ export function LeadSheet({
         { ...data, importe_previsto: importe, curso_interes: data.curso_interes || null },
         opp.id,
         lines.join("\n"),
+        getCualificandoStageId(),
       );
-      if (res.error) { setFichaErr(res.error); return; }
+      if ("error" in res) { setFichaErr(res.error); return; }
+      advancedToCualificando.current = true;
+      if (res.newStageId) {
+        const newStageName = stages.find(s => s.id === res.newStageId)?.name ?? "";
+        onStageChange?.(opp.id, res.newStageId, newStageName);
+      }
       // Re-fetch from DB so the sheet shows exact saved state
       await fetchProfile();
       setModal(null);
