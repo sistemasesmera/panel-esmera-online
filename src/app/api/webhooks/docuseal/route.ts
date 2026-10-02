@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from "crypto";
 import { NextRequest } from "next/server";
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { sendEnrollmentNotification } from "@/lib/email/enrollment-notification";
 
 function addMonths(dateStr: string, months: number): string {
   const d = new Date(dateStr);
@@ -130,6 +131,11 @@ export async function POST(req: NextRequest) {
 
     if (contractRaw.enrollment_id) revalidatePath(`/enrollments/${contractRaw.enrollment_id}`);
 
+    // Send email notification on contract signed (non-blocking)
+    if (contractRaw.enrollment_id) {
+      notifyContractSigned(db, contractRaw.enrollment_id).catch(() => {});
+    }
+
     // Download signed PDF to Supabase Storage (best-effort)
     if (docusealUrl && contractRaw.enrollment_id) {
       try {
@@ -207,4 +213,73 @@ export async function POST(req: NextRequest) {
   }
 
   return Response.json({ received: true });
+}
+
+async function notifyContractSigned(db: any, enrollmentId: string) {
+  // Fetch enrollment + student + course + contract
+  const { data: enr } = await db
+    .from("enrollments")
+    .select(`
+      enrollment_number,
+      course_id, formation_id,
+      tutor_id,
+      ghl_opportunity_id,
+      students!student_id ( full_name ),
+      contracts ( amount, payment_type, cash_method, financer )
+    `)
+    .eq("id", enrollmentId)
+    .maybeSingle();
+
+  if (!enr) return;
+
+  const contract     = Array.isArray(enr.contracts) ? enr.contracts[0] : enr.contracts;
+  const studentName  = enr.students?.full_name ?? "Alumno";
+  const amount       = contract?.amount ?? 0;
+  const paymentType  = contract?.payment_type ?? "contado";
+  const paymentOption = contract?.cash_method ?? contract?.financer ?? "—";
+
+  // Course / formation name
+  let courseName = "—";
+  if (enr.course_id) {
+    const { data: c } = await db.from("courses").select("name").eq("id", enr.course_id).maybeSingle();
+    if (c?.name) courseName = c.name;
+  } else if (enr.formation_id) {
+    const { data: f } = await db.from("formations").select("name").eq("id", enr.formation_id).maybeSingle();
+    if (f?.name) courseName = f.name;
+  }
+
+  // Recipients
+  const emailSet = new Set<string>();
+
+  const { data: admins } = await db.from("users").select("email").eq("role", "administracion");
+  for (const u of admins ?? []) if (u.email) emailSet.add(u.email);
+
+  if (enr.tutor_id) {
+    const { data: tutor } = await db.from("users").select("email").eq("id", enr.tutor_id).maybeSingle();
+    if (tutor?.email) emailSet.add(tutor.email);
+  }
+
+  if (enr.ghl_opportunity_id) {
+    const { data: lp } = await db
+      .from("lead_profiles")
+      .select("setter_id, closer_id")
+      .eq("ghl_opportunity_id", enr.ghl_opportunity_id)
+      .maybeSingle();
+    const ids = [lp?.setter_id, lp?.closer_id].filter(Boolean) as string[];
+    if (ids.length) {
+      const { data: commercials } = await db.from("users").select("email").in("id", ids);
+      for (const u of commercials ?? []) if (u.email) emailSet.add(u.email);
+    }
+  }
+
+  await sendEnrollmentNotification({
+    enrollmentNumber: enr.enrollment_number,
+    enrollmentId,
+    studentName,
+    courseName,
+    amount,
+    paymentType,
+    paymentOption,
+    recipientEmails: [...emailSet],
+  });
 }

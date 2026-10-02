@@ -35,7 +35,7 @@ export async function sendEnrollmentNotification({
   await resend.emails.send({
     from,
     to: unique,
-    subject: `✅ Nueva matrícula #${enrollmentNumber} — ${studentName}`,
+    subject: `🎉 Contrato firmado · Matrícula #${enrollmentNumber} — ${studentName}`,
     html: `
 <!DOCTYPE html>
 <html lang="es">
@@ -48,14 +48,14 @@ export async function sendEnrollmentNotification({
         <tr>
           <td style="background:linear-gradient(135deg,#1ab5c0,#0a8a94);padding:28px 32px;">
             <p style="margin:0;color:#fff;font-size:13px;font-weight:600;opacity:.85;letter-spacing:.04em;text-transform:uppercase;">Esmera Online · Panel</p>
-            <h1 style="margin:6px 0 0;color:#fff;font-size:22px;font-weight:700;">✅ Nueva matrícula generada</h1>
+            <h1 style="margin:6px 0 0;color:#fff;font-size:22px;font-weight:700;">🎉 Contrato firmado — Matrícula activa</h1>
           </td>
         </tr>
 
         <tr>
           <td style="padding:28px 32px 20px;">
             <p style="margin:0 0 20px;font-size:15px;color:#1e293b;">
-              Se ha generado la matrícula <strong>#${enrollmentNumber}</strong>:
+              El alumno ha firmado el contrato. La matrícula <strong>#${enrollmentNumber}</strong> está activa:
             </p>
             <table width="100%" cellpadding="0" cellspacing="0">
               ${row("Alumno",  studentName)}
