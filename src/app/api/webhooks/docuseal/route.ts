@@ -250,6 +250,7 @@ async function notifyContractSigned(db: any, enrollmentId: string) {
 
   // Recipients
   const emailSet = new Set<string>();
+  emailSet.add("info@esmeraonline.com");
 
   const { data: admins } = await db.from("users").select("email").eq("role", "administracion");
   for (const u of admins ?? []) if (u.email) emailSet.add(u.email);

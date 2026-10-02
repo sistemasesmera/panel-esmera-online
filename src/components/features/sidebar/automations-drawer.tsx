@@ -40,9 +40,9 @@ const AUTOMATIONS: Automation[] = [
     status:  "activa",
   },
   {
-    title:   "Nueva matrícula → Email de notificación",
-    trigger: "Se genera una nueva matrícula en el panel",
-    action:  "El panel envía automáticamente un email al comercial asignado, al tutor y a todos los administradores con los datos de la matrícula",
+    title:   "Contrato firmado → Email de notificación",
+    trigger: "El alumno firma el contrato en DocuSeal",
+    action:  "El panel envía un email a info@esmeraonline.com, al comercial asignado, al tutor y a todos los administradores con los datos de la matrícula activa",
     system:  "Panel",
     status:  "activa",
   },
