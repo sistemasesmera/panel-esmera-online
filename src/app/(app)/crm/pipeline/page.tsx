@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { requireCapability } from "@/lib/auth/require-role";
-import { fetchPipelineData } from "@/lib/data/ghl-pipeline.repository";
+import { fetchPipelineStructure } from "@/lib/data/ghl-pipeline.repository";
 import { PipelineKanban } from "@/components/features/crm/pipeline-kanban";
 
 export const metadata: Metadata = { title: "Pipeline" };
@@ -8,9 +8,9 @@ export const metadata: Metadata = { title: "Pipeline" };
 export default async function PipelinePage() {
   const currentUser = await requireCapability("viewPipeline");
 
-  let data;
+  let structure;
   try {
-    data = await fetchPipelineData({ id: currentUser.id, role: currentUser.role });
+    structure = await fetchPipelineStructure();
   } catch (e) {
     return (
       <div>
@@ -27,9 +27,8 @@ export default async function PipelinePage() {
     <div>
       <h1 className="text-2xl font-black tracking-tight mb-6">Pipeline de ventas</h1>
       <PipelineKanban
-        pipelines={data.pipelines}
-        oppsByPipeline={data.oppsByPipeline}
-        formQuestionDefs={data.formQuestionDefs}
+        pipelines={structure.pipelines}
+        formQuestionDefs={structure.formQuestionDefs}
         currentUser={{ id: currentUser.id, role: currentUser.role }}
       />
     </div>

@@ -34,12 +34,9 @@ export type OppEnriched = GhlOpportunity & {
   closer_name:      string | null;
 };
 
-export type PipelineData = {
-  pipelines:          GhlPipeline[];
-  oppsByPipeline:     Record<string, OppEnriched[]>;
-  totalValue:         number;
-  totalOpen:          number;
-  formQuestionDefs:   GhlCustomFieldDef[];
+export type PipelineStructure = {
+  pipelines:       GhlPipeline[];
+  formQuestionDefs: GhlCustomFieldDef[];
 };
 
 export type PipelineUser = { id: string; role: AppRole };
@@ -70,7 +67,7 @@ async function enrichOpps(
     .in("ghl_contact_id", uniqueContactIds);
 
   type ProfileRow = {
-    ghl_contact_id: string;
+    ghl_contact_id:   string;
     temperatura:      string | null;
     importe_previsto: number | null;
     setter_id:        string | null;
@@ -105,19 +102,16 @@ async function enrichOpps(
     };
   });
 
-  // ── Filter by assignment based on role ────────────────────────────────────
   if (currentUser.role === "administracion") return enriched;
 
-  // Any non-admin sees leads where they are setter OR closer (roles can overlap)
   return enriched.filter(o =>
     o.setter_id === currentUser.id ||
     o.closer_id === currentUser.id ||
-    // Unassigned leads visible to setters so they can be picked up
     (currentUser.role === "setter" && !o.setter_id && !o.closer_id)
   );
 }
 
-async function syncPipelineToCache(pipelineId: string): Promise<void> {
+export async function syncPipelineToCache(pipelineId: string): Promise<void> {
   await acquireSyncLock(pipelineId);
   try {
     const opps = await fetchGhlOpportunities(pipelineId);
@@ -127,7 +121,8 @@ async function syncPipelineToCache(pipelineId: string): Promise<void> {
   }
 }
 
-export async function fetchPipelineData(currentUser: PipelineUser): Promise<PipelineData> {
+// Devuelve solo la estructura (pipelines + fieldDefs) — no toca GHL leads, es rápido
+export async function fetchPipelineStructure(): Promise<PipelineStructure> {
   const defaultPipelineId = process.env.GHL_PIPELINE_ID;
   const cursoFieldId      = process.env.GHL_CURSO_FIELD_ID       ?? null;
   const origenFieldId     = process.env.GHL_ORIGEN_LEAD_FIELD_ID ?? null;
@@ -137,39 +132,34 @@ export async function fetchPipelineData(currentUser: PipelineUser): Promise<Pipe
     fetchGhlCustomFieldDefs(),
   ]);
 
-  const systemIds   = new Set([cursoFieldId, origenFieldId].filter(Boolean) as string[]);
-  const systemKeys  = new Set(["contact.curso", "contact.origen_lead"]);
+  const systemIds  = new Set([cursoFieldId, origenFieldId].filter(Boolean) as string[]);
+  const systemKeys = new Set(["contact.curso", "contact.origen_lead"]);
   const formQuestionDefs = allDefs.filter(d => !systemIds.has(d.id) && !systemKeys.has(d.fieldKey));
 
   const pipelines = defaultPipelineId
     ? allPipelines.filter((p) => p.id === defaultPipelineId)
     : allPipelines;
 
-  const entries = await Promise.all(
-    pipelines.map(async (p) => {
-      const state = await getCacheState(p.id);
+  return { pipelines, formQuestionDefs };
+}
 
-      if (state.isEmpty) {
-        // Primera carga — sincronizar GHL ahora de forma síncrona
-        await syncPipelineToCache(p.id);
-      } else if (state.isStale && !state.isLocked) {
-        // Caché obsoleta — servir datos actuales y refrescar en segundo plano
-        after(async () => {
-          try { await syncPipelineToCache(p.id); }
-          catch (e) { console.error("[pipeline] bg sync failed:", e); }
-        });
-      }
+// Usado por el API route — lee de caché y enriquece con lead_profiles
+export async function fetchEnrichedPipelineOpps(
+  pipelineId:  string,
+  pipeline:    GhlPipeline,
+  currentUser: PipelineUser,
+): Promise<OppEnriched[]> {
+  const state = await getCacheState(pipelineId);
 
-      const opps     = await getOpportunitiesFromCache(p.id);
-      const enriched = await enrichOpps(opps, p, currentUser);
-      return [p.id, enriched] as const;
-    })
-  );
+  if (state.isEmpty) {
+    await syncPipelineToCache(pipelineId);
+  } else if (state.isStale && !state.isLocked) {
+    after(async () => {
+      try { await syncPipelineToCache(pipelineId); }
+      catch (e) { console.error("[pipeline] bg sync failed:", e); }
+    });
+  }
 
-  const oppsByPipeline = Object.fromEntries(entries);
-  const allOpps        = Object.values(oppsByPipeline).flat();
-  const totalValue     = allOpps.reduce((s, o) => s + (o.monetaryValue ?? 0), 0);
-  const totalOpen      = allOpps.filter((o) => o.status === "open").length;
-
-  return { pipelines, oppsByPipeline, totalValue, totalOpen, formQuestionDefs };
+  const opps = await getOpportunitiesFromCache(pipelineId);
+  return enrichOpps(opps, pipeline, currentUser);
 }
