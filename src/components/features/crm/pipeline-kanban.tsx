@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { LayoutGrid, List, ArrowRight, GraduationCap, Mail, Clock, CalendarPlus, Flame, Thermometer, Snowflake, Plus, UserCheck } from "lucide-react";
+import { LayoutGrid, List, ArrowRight, GraduationCap, Mail, Clock, CalendarPlus, Flame, Thermometer, Snowflake, Plus, UserCheck, ChevronUp, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { LeadSheet } from "./lead-sheet";
 import { NewLeadModal } from "./new-lead-modal";
@@ -322,13 +322,15 @@ function PhaseGroup({
 
 // ── ListView ──────────────────────────────────────────────────────────────────
 function ListView({
-  opps, onOpen, selectedIds, onToggleId, onToggleAll,
+  opps, onOpen, selectedIds, onToggleId, onToggleAll, sortDir, onToggleSort,
 }: {
-  opps:        OppEnriched[];
-  onOpen:      (opp: OppEnriched) => void;
-  selectedIds: Set<string>;
-  onToggleId:  (id: string) => void;
-  onToggleAll: () => void;
+  opps:          OppEnriched[];
+  onOpen:        (opp: OppEnriched) => void;
+  selectedIds:   Set<string>;
+  onToggleId:    (id: string) => void;
+  onToggleAll:   () => void;
+  sortDir:       "asc" | "desc";
+  onToggleSort:  () => void;
 }) {
   const STATUS_CLS: Record<string, string> = {
     open:      "bg-emerald-50 text-emerald-600 ring-1 ring-emerald-200/60",
@@ -358,17 +360,29 @@ function ListView({
             <th className="text-left px-5 py-3.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Contacto</th>
             <th className="text-left px-5 py-3.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Etapa</th>
             <th className="text-left px-5 py-3.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Curso</th>
-            <th className="text-left px-5 py-3.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Equipo</th>
+            <th className="text-left px-5 py-3.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Setter</th>
+            <th className="text-left px-5 py-3.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Closer</th>
             <th className="text-right px-5 py-3.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Valor</th>
             <th className="text-left px-5 py-3.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Estado</th>
-            <th className="text-left px-5 py-3.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Hace</th>
+            <th className="text-left px-5 py-3.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              <button
+                onClick={onToggleSort}
+                className="cursor-pointer inline-flex items-center gap-1 hover:text-slate-600 transition-colors"
+              >
+                Creado
+                {sortDir === "desc"
+                  ? <ChevronDown className="h-3 w-3" />
+                  : <ChevronUp className="h-3 w-3" />
+                }
+              </button>
+            </th>
             <th />
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
           {opps.map(opp => {
-            const cfg       = getStageCfg(opp.pipelineStageName ?? "");
-            const avatarIdx = ([...(opp.contact.name ?? "")][0]?.codePointAt(0) ?? 0) % 5;
+            const cfg        = getStageCfg(opp.pipelineStageName ?? "");
+            const avatarIdx  = ([...(opp.contact.name ?? "")][0]?.codePointAt(0) ?? 0) % 5;
             const isSelected = selectedIds.has(opp.id);
             return (
               <tr key={opp.id} className={cn("hover:bg-slate-50/70 transition-colors", isSelected && "bg-indigo-50/60")}>
@@ -400,21 +414,18 @@ function ListView({
                     <span className="text-xs text-slate-600">{opp.pipelineStageName ?? "—"}</span>
                   </div>
                 </td>
-                <td className="px-5 py-3 text-xs text-slate-500 max-w-[160px] truncate">{opp.cursoValue ?? "—"}</td>
+                <td className="px-5 py-3 text-xs text-slate-500 max-w-[140px] truncate">{opp.cursoValue ?? "—"}</td>
                 <td className="px-5 py-3">
-                  <div className="flex flex-col gap-1">
-                    {opp.setter_name && (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold bg-sky-50 text-sky-700 ring-1 ring-sky-200/60 rounded-full px-2 py-0.5 w-fit">
-                        <span className="text-sky-400">S</span>{opp.setter_name.split(" ")[0]}
-                      </span>
-                    )}
-                    {opp.closer_name && (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold bg-violet-50 text-violet-700 ring-1 ring-violet-200/60 rounded-full px-2 py-0.5 w-fit">
-                        <span className="text-violet-400">C</span>{opp.closer_name.split(" ")[0]}
-                      </span>
-                    )}
-                    {!opp.setter_name && !opp.closer_name && <span className="text-[10px] text-slate-300">—</span>}
-                  </div>
+                  {opp.setter_name
+                    ? <span className="text-xs font-semibold text-sky-700">{opp.setter_name}</span>
+                    : <span className="text-[10px] text-slate-300">Sin asignar</span>
+                  }
+                </td>
+                <td className="px-5 py-3">
+                  {opp.closer_name
+                    ? <span className="text-xs font-semibold text-violet-700">{opp.closer_name}</span>
+                    : <span className="text-[10px] text-slate-300">—</span>
+                  }
                 </td>
                 <td className="px-5 py-3 text-right text-xs font-bold text-emerald-600 tabular-nums">
                   {opp.monetaryValue ? fmt(opp.monetaryValue) : "—"}
@@ -424,7 +435,7 @@ function ListView({
                     {STATUS_LBL[opp.status] ?? opp.status}
                   </span>
                 </td>
-                <td className="px-5 py-3 text-xs text-slate-400">{fmtDateTime(opp.updatedAt)}</td>
+                <td className="px-5 py-3 text-xs text-slate-400 tabular-nums whitespace-nowrap">{fmtDateTime(opp.createdAt)}</td>
                 <td className="px-3 py-3">
                   <button
                     onClick={() => onOpen(opp)}
@@ -472,6 +483,7 @@ export function PipelineKanban({ pipelines, oppsByPipeline, formQuestionDefs, cu
   const [setterList,   setSetterList]   = useState<Array<{ id: string; full_name: string }>>([]);
   const [bulkOpen,     setBulkOpen]     = useState(false);
   const [, startBulkTransition]         = useTransition();
+  const [sortDir,      setSortDir]      = useState<"asc" | "desc">("desc");
 
   const [shared, setShared] = useState<SharedData>({ courses: [], platforms: [], tutors: [] });
   const [formations, setFormations] = useState<Array<{ id: string; name: string; courses: Array<{ course_id: string; position: number; course: { id: string; name: string } }> }>>([]);
@@ -838,11 +850,17 @@ export function PipelineKanban({ pipelines, oppsByPipeline, formQuestionDefs, cu
         </div>
       ) : (
         <ListView
-          opps={filteredOpps}
+          opps={[...filteredOpps].sort((a, b) => {
+            const ta = new Date(a.createdAt).getTime();
+            const tb = new Date(b.createdAt).getTime();
+            return sortDir === "desc" ? tb - ta : ta - tb;
+          })}
           onOpen={setSheetOpp}
           selectedIds={selectedIds}
           onToggleId={toggleId}
           onToggleAll={toggleAll}
+          sortDir={sortDir}
+          onToggleSort={() => setSortDir(d => d === "desc" ? "asc" : "desc")}
         />
       )}
 
