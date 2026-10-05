@@ -784,7 +784,10 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser }: Pro
   const matchedIds      = new Set(stagesByPhase.flatMap(x => x.stages.map(s => s.id)));
   const unmatchedStages = (pipeline?.stages ?? []).filter(s => !matchedIds.has(s.id));
 
-  const allLoaded = Object.keys(stageData).length > 0 && Object.values(stageData).every(e => !e.initialLoad);
+  const allLoaded  = Object.keys(stageData).length > 0 && Object.values(stageData).every(e => !e.initialLoad);
+  const isSearching = filterSearch.trim().length > 0;
+  // Fuente de datos activa: resultados de búsqueda GHL o leads cargados por etapa
+  const activeOpps  = isSearching && searchResults ? searchResults : filteredOpps;
 
   function toggleId(id: string) {
     setSelectedIds(prev => {
@@ -967,42 +970,32 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser }: Pro
         </div>
       </div>
 
-      {/* ── Resultados de búsqueda ── */}
-      {filterSearch.trim() && (
-        <div className="flex flex-col gap-3">
-          <p className="text-xs text-slate-400">
-            {searchLoading
-              ? "Buscando en GHL…"
-              : searchResults
-                ? `${searchResults.length} resultado${searchResults.length !== 1 ? "s" : ""} para "${filterSearch}"`
-                : ""
-            }
-          </p>
-          {searchResults && searchResults.length > 0 && (
-            <ListView
-              opps={searchResults}
-              onOpen={setSheetOpp}
-              selectedIds={new Set()}
-              onToggleId={() => {}}
-              onToggleAll={() => {}}
-              sortDir="desc"
-              onToggleSort={() => {}}
-            />
-          )}
-          {searchResults && searchResults.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-16 gap-2 text-slate-400">
-              <svg className="h-8 w-8 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
-              </svg>
-              <p className="text-sm">Sin resultados en GHL para &ldquo;{filterSearch}&rdquo;</p>
-            </div>
-          )}
+      {/* ── Spinner de búsqueda ── */}
+      {isSearching && searchLoading && (
+        <div className="flex items-center justify-center gap-2 py-16 text-sm text-slate-400">
+          <Spinner className="h-4 w-4" />
+          Buscando…
         </div>
       )}
 
-      {/* ── Kanban ── */}
-      {!filterSearch.trim() && view === "kanban" && (
-        allLoaded ? (
+      {/* ── Sin resultados ── */}
+      {isSearching && !searchLoading && searchResults?.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-16 gap-2 text-slate-400">
+          <svg className="h-8 w-8 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+          </svg>
+          <p className="text-sm">Sin resultados para &ldquo;{filterSearch}&rdquo;</p>
+        </div>
+      )}
+
+      {/* ── Kanban (normal o resultados de búsqueda) ── */}
+      {view === "kanban" && !searchLoading && (isSearching ? searchResults !== null && searchResults.length > 0 : allLoaded) && (
+        <>
+          {isSearching && searchResults && (
+            <p className="text-xs text-slate-400 -mb-2">
+              {searchResults.length} resultado{searchResults.length !== 1 ? "s" : ""} para &ldquo;{filterSearch}&rdquo;
+            </p>
+          )}
           <div className="overflow-x-auto pb-4 flex-1">
             <div className="flex gap-0 items-start" style={{ minWidth: "max-content" }}>
               {stagesByPhase.map(({ phase, stages }, pi) =>
@@ -1022,10 +1015,10 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser }: Pro
                           <KanbanColumn
                             key={stage.id}
                             stage={stage}
-                            opps={filteredOpps.filter(o => o.pipelineStageId === stage.id)}
-                            total={stageData[stage.id]?.total ?? null}
-                            loadingMore={stageData[stage.id]?.loading ?? false}
-                            onScrollBottom={() => loadMoreForStage(stage.id)}
+                            opps={activeOpps.filter(o => o.pipelineStageId === stage.id)}
+                            total={isSearching ? null : (stageData[stage.id]?.total ?? null)}
+                            loadingMore={isSearching ? false : (stageData[stage.id]?.loading ?? false)}
+                            onScrollBottom={isSearching ? undefined : () => loadMoreForStage(stage.id)}
                             onOpen={setSheetOpp}
                             onDragStart={handleDragStart}
                             onDrop={handleDrop}
@@ -1043,10 +1036,10 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser }: Pro
                 <KanbanColumn
                   key={stage.id}
                   stage={stage}
-                  opps={filteredOpps.filter(o => o.pipelineStageId === stage.id)}
-                  total={stageData[stage.id]?.total ?? null}
-                  loadingMore={stageData[stage.id]?.loading ?? false}
-                  onScrollBottom={() => loadMoreForStage(stage.id)}
+                  opps={activeOpps.filter(o => o.pipelineStageId === stage.id)}
+                  total={isSearching ? null : (stageData[stage.id]?.total ?? null)}
+                  loadingMore={isSearching ? false : (stageData[stage.id]?.loading ?? false)}
+                  onScrollBottom={isSearching ? undefined : () => loadMoreForStage(stage.id)}
                   onOpen={setSheetOpp}
                   onDragStart={handleDragStart}
                   onDrop={handleDrop}
@@ -1057,15 +1050,18 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser }: Pro
               ))}
             </div>
           </div>
-        ) : pipeline ? (
-          <KanbanSkeleton pipeline={pipeline} />
-        ) : null
+        </>
+      )}
+
+      {/* ── Skeleton carga inicial ── */}
+      {view === "kanban" && !isSearching && !allLoaded && pipeline && (
+        <KanbanSkeleton pipeline={pipeline} />
       )}
 
       {/* ── Lista ── */}
-      {!filterSearch.trim() && view === "list" && (
+      {view === "list" && !searchLoading && (
         <ListView
-          opps={[...filteredOpps].sort((a, b) => {
+          opps={[...activeOpps].sort((a, b) => {
             const ta = new Date(a.createdAt).getTime();
             const tb = new Date(b.createdAt).getTime();
             return sortDir === "desc" ? tb - ta : ta - tb;
