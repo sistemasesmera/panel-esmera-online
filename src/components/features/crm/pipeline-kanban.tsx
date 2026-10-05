@@ -301,6 +301,85 @@ function KanbanColumn({
   );
 }
 
+// ── KanbanSkeleton ────────────────────────────────────────────────────────────
+function KanbanSkeleton({ pipeline }: { pipeline: GhlPipeline }) {
+  const stagesByPhase = PHASES.map(phase => ({
+    phase,
+    stages: pipeline.stages.filter(s =>
+      phase.stageKeys.some(k => {
+        const norm = (x: string) => x.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+        return norm(s.name).includes(norm(k)) || norm(k).includes(norm(s.name));
+      })
+    ),
+  }));
+  const matchedIds      = new Set(stagesByPhase.flatMap(x => x.stages.map(s => s.id)));
+  const unmatchedStages = pipeline.stages.filter(s => !matchedIds.has(s.id));
+
+  function SkeletonColumn({ stage }: { stage: GhlPipelineStage }) {
+    const cfg = getStageCfg(stage.name);
+    return (
+      <div className="flex flex-col w-[260px] shrink-0">
+        <div className={cn("rounded-t-xl px-3.5 py-3", cfg.header)}>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-bold text-white truncate">{stage.name}</p>
+            <span className="shrink-0 text-[10px] font-bold bg-white/25 text-white px-2 py-0.5 rounded-full min-w-[22px] text-center">…</span>
+          </div>
+        </div>
+        <div
+          className="rounded-b-xl p-2 space-y-2 bg-slate-100/70"
+          style={{ height: "calc(100vh - 290px)", minHeight: "200px" }}
+        >
+          {[0, 1, 2].map(i => (
+            <div key={i} className="bg-white rounded-xl border border-slate-200 border-l-4 border-l-slate-200 p-4 animate-pulse">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="h-9 w-9 rounded-xl bg-slate-200 shrink-0" />
+                <div className="flex-1 space-y-1.5">
+                  <div className="h-3 bg-slate-200 rounded w-3/4" />
+                  <div className="h-2.5 bg-slate-100 rounded w-1/2" />
+                </div>
+              </div>
+              <div className="space-y-2 mb-3">
+                <div className="h-2.5 bg-slate-100 rounded w-full" />
+                <div className="h-2.5 bg-slate-100 rounded w-2/3" />
+              </div>
+              <div className="pt-2 border-t border-slate-100 flex justify-end">
+                <div className="h-2.5 w-2.5 bg-slate-100 rounded" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="overflow-x-auto pb-4 flex-1">
+      <div className="flex gap-0 items-start" style={{ minWidth: "max-content" }}>
+        {stagesByPhase.map(({ phase, stages }, pi) =>
+          stages.length > 0 ? (
+            <div key={phase.id} className="flex items-start gap-2.5">
+              {pi > 0 && (
+                <div className="flex flex-col items-center self-stretch pt-1 px-1">
+                  <div className="w-px flex-1 bg-slate-200" />
+                </div>
+              )}
+              <div className="flex flex-col gap-2 pr-1">
+                <p className={cn("text-[9px] font-black uppercase tracking-widest px-1", phase.color)}>
+                  {phase.label}
+                </p>
+                <div className="flex gap-2.5">
+                  {stages.map(stage => <SkeletonColumn key={stage.id} stage={stage} />)}
+                </div>
+              </div>
+            </div>
+          ) : null
+        )}
+        {unmatchedStages.map(stage => <SkeletonColumn key={stage.id} stage={stage} />)}
+      </div>
+    </div>
+  );
+}
+
 // ── ListView ──────────────────────────────────────────────────────────────────
 function ListView({
   opps, onOpen, selectedIds, onToggleId, onToggleAll, sortDir, onToggleSort,
@@ -705,6 +784,8 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser }: Pro
   const matchedIds      = new Set(stagesByPhase.flatMap(x => x.stages.map(s => s.id)));
   const unmatchedStages = (pipeline?.stages ?? []).filter(s => !matchedIds.has(s.id));
 
+  const allLoaded = Object.keys(stageData).length > 0 && Object.values(stageData).every(e => !e.loading);
+
   function toggleId(id: string) {
     setSelectedIds(prev => {
       const next = new Set(prev);
@@ -920,7 +1001,10 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser }: Pro
       )}
 
       {/* ── Kanban / List ── */}
-      {!filterSearch.trim() && view === "kanban" ? (
+      {!filterSearch.trim() && view === "kanban" && !allLoaded && pipeline && (
+        <KanbanSkeleton pipeline={pipeline} />
+      )}
+      {!filterSearch.trim() && view === "kanban" && allLoaded ? (
         <div className="overflow-x-auto pb-4 flex-1">
           <div className="flex gap-0 items-start" style={{ minWidth: "max-content" }}>
             {stagesByPhase.map(({ phase, stages }, pi) =>
