@@ -40,8 +40,8 @@ const GROUPS: NavGroup[] = [
   {
     label: "Sistema",
     items: [
-      { label: "Logs",       href: "/logs",         icon: ScrollText,   roles: ["administracion"] },
-      { label: "Usuarios",   href: "/admin/users",  icon: Settings,     roles: ["administracion"] },
+      { label: "Logs",     href: "/logs",        icon: ScrollText, roles: ["administracion"] },
+      { label: "Usuarios", href: "/admin/users", icon: Settings,   roles: ["administracion"] },
     ],
   },
 ];

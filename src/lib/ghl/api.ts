@@ -1,6 +1,7 @@
 import "server-only";
 
 const GHL_API_BASE = "https://services.leadconnectorhq.com";
+const GHL_TIMEOUT_MS = 12_000;
 
 function ghlHeaders() {
   return {
@@ -8,6 +9,12 @@ function ghlHeaders() {
     "Content-Type": "application/json",
     Version: "2021-04-15",
   };
+}
+
+function ghlFetch(url: string, init?: RequestInit): Promise<Response> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), GHL_TIMEOUT_MS);
+  return fetch(url, { ...init, signal: ctrl.signal }).finally(() => clearTimeout(timer));
 }
 
 export type GhlPipelineStage = {
@@ -61,13 +68,13 @@ export async function fetchGhlPipelines(): Promise<GhlPipeline[]> {
   const url = new URL(`${GHL_API_BASE}/opportunities/pipelines`);
   url.searchParams.set("locationId", locationId);
 
-  const res = await fetch(url.toString(), { headers: ghlHeaders(), cache: "no-store" });
+  const res = await ghlFetch(url.toString(), { headers: ghlHeaders(), cache: "no-store" });
   if (!res.ok) throw new Error(`GHL pipelines error ${res.status}: ${await res.text()}`);
   const data = await res.json();
   return (data.pipelines ?? []) as GhlPipeline[];
 }
 
-export async function fetchGhlOpportunities(pipelineId: string): Promise<GhlOpportunity[]> {
+export async function fetchGhlOpportunities(pipelineId: string, limit = 100): Promise<GhlOpportunity[]> {
   const locationId = process.env.GHL_LOCATION_ID;
   if (!locationId) throw new Error("GHL_LOCATION_ID not set");
   if (!process.env.GHL_API_KEY) throw new Error("GHL_API_KEY not set");
@@ -79,16 +86,17 @@ export async function fetchGhlOpportunities(pipelineId: string): Promise<GhlOppo
     const url = new URL(`${GHL_API_BASE}/opportunities/search`);
     url.searchParams.set("location_id", locationId);
     url.searchParams.set("pipeline_id", pipelineId);
-    url.searchParams.set("limit", "100");
+    url.searchParams.set("limit", String(Math.min(limit, 100)));
     if (startAfterId) url.searchParams.set("startAfterId", startAfterId);
 
-    const res = await fetch(url.toString(), { headers: ghlHeaders(), cache: "no-store" });
+    const res = await ghlFetch(url.toString(), { headers: ghlHeaders(), cache: "no-store" });
     if (!res.ok) throw new Error(`GHL opportunities error ${res.status}: ${await res.text()}`);
     const data = await res.json();
     // Cast as any first to preserve raw customFields (including fieldValueString)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const page = (data.opportunities ?? []) as any[] as GhlOpportunity[];
     all.push(...page);
+    if (all.length >= limit) break;
     startAfterId = data.meta?.startAfterId ?? undefined;
     if (page.length < 100) break;
   } while (startAfterId);
@@ -98,7 +106,7 @@ export async function fetchGhlOpportunities(pipelineId: string): Promise<GhlOppo
 
 export async function fetchGhlOpportunity(id: string): Promise<GhlOpportunity | null> {
   if (!process.env.GHL_API_KEY) return null;
-  const res = await fetch(`${GHL_API_BASE}/opportunities/${id}`, {
+  const res = await ghlFetch(`${GHL_API_BASE}/opportunities/${id}`, {
     headers: ghlHeaders(),
     cache: "no-store",
   });
@@ -312,7 +320,7 @@ export type GhlCustomFieldDef = {
 export async function fetchGhlCustomFieldDefs(): Promise<GhlCustomFieldDef[]> {
   const locationId = process.env.GHL_LOCATION_ID;
   if (!locationId || !process.env.GHL_API_KEY) return [];
-  const res = await fetch(`${GHL_API_BASE}/locations/${locationId}/customFields`, {
+  const res = await ghlFetch(`${GHL_API_BASE}/locations/${locationId}/customFields`, {
     headers: ghlHeaders(),
     cache: "no-store",
   });

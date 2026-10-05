@@ -76,7 +76,8 @@ function fmtDateTime(dateStr: string) {
 }
 
 function initials(name: string) {
-  return name.split(" ").slice(0, 2).map(n => n[0]).join("").toUpperCase();
+  if (!name?.trim()) return "?";
+  return name.trim().split(/\s+/).slice(0, 2).map(n => ([...n][0] ?? "").toUpperCase()).join("");
 }
 
 const AVATAR_COLORS = [
@@ -96,7 +97,7 @@ function OppCard({
   onDragStart: (opp: OppEnriched) => void;
 }) {
   const cfg       = getStageCfg(opp.pipelineStageName ?? "");
-  const avatarIdx = opp.contact.name.charCodeAt(0) % 5;
+  const avatarIdx = ([...(opp.contact.name ?? "")][0]?.codePointAt(0) ?? 0) % 5;
 
   return (
     <div
@@ -349,7 +350,7 @@ function ListView({ opps, onOpen }: { opps: OppEnriched[]; onOpen: (opp: OppEnri
         <tbody className="divide-y divide-slate-100">
           {opps.map(opp => {
             const cfg       = getStageCfg(opp.pipelineStageName ?? "");
-            const avatarIdx = opp.contact.name.charCodeAt(0) % 5;
+            const avatarIdx = ([...(opp.contact.name ?? "")][0]?.codePointAt(0) ?? 0) % 5;
             return (
               <tr key={opp.id} className="hover:bg-slate-50/70 transition-colors">
                 <td className="px-5 py-3">
