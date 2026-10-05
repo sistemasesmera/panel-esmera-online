@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useTransition, useRef } from "react";
+import { useState, useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { LayoutGrid, List, ArrowRight, GraduationCap, Mail, Clock, CalendarPlus, Flame, Thermometer, Snowflake, Plus, UserCheck, ChevronUp, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
@@ -49,12 +49,6 @@ const PHASES: Phase[] = [
   { id: "resultados",  label: "Resultados",  stageKeys: ["matriculado", "perdido", "no cualificado"],        color: "text-slate-600" },
 ];
 
-function phaseForStage(name: string): Phase | undefined {
-  const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
-  const key  = norm(name);
-  return PHASES.find(ph => ph.stageKeys.some(k => key.includes(norm(k)) || norm(k).includes(key)));
-}
-
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const PROSPECTION_KEYS = ["lead nuevo", "contactando", "cualificando"];
 
@@ -88,7 +82,17 @@ const AVATAR_COLORS = [
   "from-emerald-400 to-emerald-600",
 ];
 
-// ── OppCard — BIGGER, more prominent ─────────────────────────────────────────
+// ── Spinner helper ────────────────────────────────────────────────────────────
+function Spinner({ className }: { className?: string }) {
+  return (
+    <svg className={cn("animate-spin", className)} viewBox="0 0 24 24" fill="none">
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+    </svg>
+  );
+}
+
+// ── OppCard ───────────────────────────────────────────────────────────────────
 function OppCard({
   opp, onOpen, onDragStart,
 }: {
@@ -153,7 +157,7 @@ function OppCard({
         </div>
       )}
 
-      {/* Temperatura + importe — destacados */}
+      {/* Temperatura + importe */}
       {(opp.temperatura || opp.importe_previsto) && (
         <div className="flex items-center justify-between gap-2 mb-2">
           {opp.temperatura && (() => {
@@ -217,19 +221,31 @@ function OppCard({
 
 // ── KanbanColumn ──────────────────────────────────────────────────────────────
 function KanbanColumn({
-  stage, opps, onOpen, onDragStart, onDrop, onDragOver, onDragLeave, isDragOver,
+  stage, opps, total, onOpen, onDragStart, onDrop, onDragOver, onDragLeave, isDragOver,
+  loadingMore, onScrollBottom,
 }: {
-  stage:       GhlPipelineStage;
-  opps:        OppEnriched[];
-  onOpen:      (opp: OppEnriched) => void;
-  onDragStart: (opp: OppEnriched) => void;
-  onDrop:      (stageId: string) => void;
-  onDragOver:  (stageId: string) => void;
-  onDragLeave: () => void;
-  isDragOver:  boolean;
+  stage:           GhlPipelineStage;
+  opps:            OppEnriched[];
+  total:           number | null;
+  onOpen:          (opp: OppEnriched) => void;
+  onDragStart:     (opp: OppEnriched) => void;
+  onDrop:          (stageId: string) => void;
+  onDragOver:      (stageId: string) => void;
+  onDragLeave:     () => void;
+  isDragOver:      boolean;
+  loadingMore?:    boolean;
+  onScrollBottom?: () => void;
 }) {
   const cfg      = getStageCfg(stage.name);
   const colValue = opps.reduce((s, o) => s + (o.monetaryValue ?? 0), 0);
+
+  function handleScroll(e: React.UIEvent<HTMLDivElement>) {
+    if (!onScrollBottom) return;
+    const el = e.currentTarget;
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < 80) {
+      onScrollBottom();
+    }
+  }
 
   return (
     <div className="flex flex-col w-[260px] shrink-0">
@@ -238,7 +254,7 @@ function KanbanColumn({
         <div className="flex items-center justify-between gap-2">
           <p className="text-xs font-bold text-white truncate">{stage.name}</p>
           <span className="shrink-0 text-[10px] font-bold bg-white/25 text-white px-2 py-0.5 rounded-full min-w-[22px] text-center">
-            {opps.length}
+            {total ?? opps.length}
           </span>
         </div>
         {colValue > 0 && (
@@ -246,75 +262,40 @@ function KanbanColumn({
         )}
       </div>
 
-      {/* Cards area — drop zone */}
+      {/* Cards area — scrollable, fixed height so overflow triggers */}
       <div
+        onScroll={handleScroll}
         onDragOver={e => { e.preventDefault(); onDragOver(stage.id); }}
         onDragLeave={onDragLeave}
         onDrop={e => { e.preventDefault(); onDrop(stage.id); }}
         className={cn(
-          "flex-1 rounded-b-xl p-2 space-y-2 min-h-[200px] overflow-y-auto transition-colors",
+          "rounded-b-xl p-2 space-y-2 overflow-y-auto transition-colors",
           isDragOver
             ? "bg-indigo-50 ring-2 ring-indigo-300 ring-inset"
             : "bg-slate-100/70"
         )}
+        style={{ height: "calc(100vh - 290px)", minHeight: "200px" }}
       >
-        {opps.length === 0 ? (
+        {loadingMore && opps.length === 0 ? (
+          <div className="flex items-center justify-center py-8">
+            <Spinner className="h-4 w-4 text-slate-400" />
+          </div>
+        ) : opps.length === 0 ? (
           <p className="text-[11px] text-slate-400 text-center py-8">
             {isDragOver ? "Soltar aquí" : "Vacío"}
           </p>
         ) : (
-          opps.map(opp => (
-            <OppCard key={opp.id} opp={opp} onOpen={onOpen} onDragStart={onDragStart} />
-          ))
+          <>
+            {opps.map(opp => (
+              <OppCard key={opp.id} opp={opp} onOpen={onOpen} onDragStart={onDragStart} />
+            ))}
+            {loadingMore && (
+              <div className="flex items-center justify-center py-2">
+                <Spinner className="h-3 w-3 text-slate-400" />
+              </div>
+            )}
+          </>
         )}
-      </div>
-    </div>
-  );
-}
-
-// ── PhaseGroup ────────────────────────────────────────────────────────────────
-function PhaseGroup({
-  phase, stages, opps, onOpen, onDragStart, onDrop, onDragOver, onDragLeave, dragOver,
-}: {
-  phase:       Phase;
-  stages:      GhlPipelineStage[];
-  opps:        OppEnriched[];
-  onOpen:      (opp: OppEnriched) => void;
-  onDragStart: (opp: OppEnriched) => void;
-  onDrop:      (stageId: string) => void;
-  onDragOver:  (stageId: string) => void;
-  onDragLeave: () => void;
-  dragOver:    string | null;
-}) {
-  if (stages.length === 0) return null;
-
-  const phaseOpps = opps.filter(o => stages.some(s => s.id === o.pipelineStageId));
-
-  return (
-    <div className="flex flex-col gap-2">
-      {/* Phase label — minimal, just a line */}
-      <div className="flex items-center gap-2 px-1">
-        <p className={cn("text-[10px] font-black uppercase tracking-widest", phase.color)}>
-          {phase.label}
-        </p>
-        <p className="text-[10px] text-slate-400">{phaseOpps.length} leads</p>
-        <div className="flex-1 h-px bg-slate-200" />
-      </div>
-      {/* Columns */}
-      <div className="flex gap-2.5">
-        {stages.map(stage => (
-          <KanbanColumn
-            key={stage.id}
-            stage={stage}
-            opps={opps.filter(o => o.pipelineStageId === stage.id)}
-            onOpen={onOpen}
-            onDragStart={onDragStart}
-            onDrop={onDrop}
-            onDragOver={onDragOver}
-            onDragLeave={onDragLeave}
-            isDragOver={dragOver === stage.id}
-          />
-        ))}
       </div>
     </div>
   );
@@ -453,13 +434,13 @@ function ListView({
   );
 }
 
-// ── Main ──────────────────────────────────────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────────────────
+type StageEntry = { opps: OppEnriched[]; total: number | null; nextPage: number | null; loading: boolean };
+
 type Props = {
   pipelines:        GhlPipeline[];
   formQuestionDefs: Array<{ id: string; name: string }>;
   currentUser:      { id: string; role: string };
-  oppsByPipeline:   Record<string, OppEnriched[]>;
-  nextPageByPipeline: Record<string, number | null>;
 };
 
 type SharedData = {
@@ -468,12 +449,14 @@ type SharedData = {
   tutors:    Array<{ id: string; full_name: string }>;
 };
 
-export function PipelineKanban({ pipelines, formQuestionDefs, currentUser, oppsByPipeline: initialOpps, nextPageByPipeline: initialCursors }: Props) {
+// ── Main ──────────────────────────────────────────────────────────────────────
+export function PipelineKanban({ pipelines, formQuestionDefs, currentUser }: Props) {
   const router = useRouter();
   const [activePipelineId, setActivePipelineId] = useState(pipelines[0]?.id ?? "");
-  const [view, setView]           = useState<"kanban" | "list">("kanban");
-  const [sheetOpp, setSheetOpp]   = useState<OppEnriched | null>(null);
-  const [newLeadOpen, setNewLeadOpen] = useState(false);
+  const [view, setView]                         = useState<"kanban" | "list">("kanban");
+  const [sheetOpp, setSheetOpp]                 = useState<OppEnriched | null>(null);
+  const [newLeadOpen, setNewLeadOpen]           = useState(false);
+  const [version, setVersion]                   = useState(0);
 
   const [filterSearch,  setFilterSearch]  = useState("");
   const [filterStageId, setFilterStageId] = useState("");
@@ -486,59 +469,74 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser, oppsB
   const [, startBulkTransition]         = useTransition();
   const [sortDir,      setSortDir]      = useState<"asc" | "desc">("desc");
 
-  // Leads extras cargados client-side (se suman a los del servidor)
-  const [extraOpps,   setExtraOpps]   = useState<Record<string, OppEnriched[]>>({});
-  const [cursors,     setCursors]     = useState(initialCursors);
-  const [autoLoading, setAutoLoading] = useState(false);
+  // Per-stage data: stageId → { opps, nextPage, loading }
+  const [stageData, setStageData] = useState<Record<string, StageEntry>>({});
 
-  // Cuando el servidor refresca los props (router.refresh), resetear extras
-  const prevInitialRef = useRef(initialOpps);
+  // ── Load all stages in parallel on mount / pipeline change / version bump ──
   useEffect(() => {
-    if (prevInitialRef.current !== initialOpps) {
-      prevInitialRef.current = initialOpps;
-      setExtraOpps({});
-      setCursors(initialCursors);
+    const pipeline = pipelines.find(p => p.id === activePipelineId);
+    if (!pipeline) return;
+
+    const init: Record<string, StageEntry> = {};
+    for (const stage of pipeline.stages) {
+      init[stage.id] = { opps: [], total: null, nextPage: null, loading: true };
     }
-  }, [initialOpps, initialCursors]);
-
-  // Auto-carga el resto de páginas después del render inicial
-  useEffect(() => {
-    const firstPage = initialCursors[activePipelineId];
-    if (!firstPage) return;
+    setStageData(init);
 
     let cancelled = false;
-    setAutoLoading(true);
 
-    const loadAll = async (page: number, seen: Set<string>) => {
-      if (cancelled) return;
-      try {
-        const res  = await fetch(`/api/ghl/pipeline/more?pipelineId=${activePipelineId}&page=${page}`);
-        if (!res.ok || cancelled) return;
-        const data = await res.json() as { opps: OppEnriched[]; nextPage: number | null };
-        if (cancelled) return;
-        const fresh = data.opps.filter(o => !seen.has(o.id));
-        fresh.forEach(o => seen.add(o.id));
-        if (fresh.length > 0) {
-          setExtraOpps(prev => ({
+    for (const stage of pipeline.stages) {
+      fetch(`/api/ghl/pipeline/stage?pipelineId=${activePipelineId}&stageId=${stage.id}&page=1`)
+        .then(r => r.ok ? r.json() : Promise.reject(r))
+        .then((data: { opps: OppEnriched[]; total: number | null; nextPage: number | null }) => {
+          if (cancelled) return;
+          setStageData(prev => ({
             ...prev,
-            [activePipelineId]: [...(prev[activePipelineId] ?? []), ...fresh],
+            [stage.id]: { opps: data.opps, total: data.total, nextPage: data.nextPage, loading: false },
           }));
-        }
-        if (data.nextPage) await loadAll(data.nextPage, seen);
-      } catch {
-        // silencioso — el usuario ya tiene los primeros 100
-      }
-    };
-
-    const seen = new Set((initialOpps[activePipelineId] ?? []).map(o => o.id));
-    loadAll(firstPage, seen).finally(() => { if (!cancelled) setAutoLoading(false); });
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setStageData(prev => ({
+            ...prev,
+            [stage.id]: { ...prev[stage.id], loading: false },
+          }));
+        });
+    }
 
     return () => { cancelled = true; };
-  // Solo se lanza al montar o cambiar de pipeline
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activePipelineId]);
+  }, [activePipelineId, version]);
 
-  const [shared, setShared] = useState<SharedData>({ courses: [], platforms: [], tutors: [] });
+  // ── Scroll-triggered load more for a single stage ─────────────────────────
+  function loadMoreForStage(stageId: string) {
+    const entry = stageData[stageId];
+    if (!entry || entry.loading || entry.nextPage === null) return;
+
+    const page = entry.nextPage;
+    setStageData(prev => ({ ...prev, [stageId]: { ...prev[stageId], loading: true } }));
+
+    fetch(`/api/ghl/pipeline/stage?pipelineId=${activePipelineId}&stageId=${stageId}&page=${page}`)
+      .then(r => r.ok ? r.json() : Promise.reject(r))
+      .then((data: { opps: OppEnriched[]; total: number | null; nextPage: number | null }) => {
+        setStageData(prev => {
+          const existing = prev[stageId];
+          if (!existing) return prev;
+          const seenIds = new Set(existing.opps.map(o => o.id));
+          const fresh   = data.opps.filter(o => !seenIds.has(o.id));
+          return {
+            ...prev,
+            [stageId]: { opps: [...existing.opps, ...fresh], total: existing.total ?? data.total, nextPage: data.nextPage, loading: false },
+          };
+        });
+      })
+      .catch(() => {
+        setStageData(prev => ({ ...prev, [stageId]: { ...prev[stageId], loading: false } }));
+      });
+  }
+
+  // ── Shared data (courses, platforms, tutors, setters) ─────────────────────
+  const [shared,     setShared]     = useState<SharedData>({ courses: [], platforms: [], tutors: [] });
   const [formations, setFormations] = useState<Array<{ id: string; name: string; courses: Array<{ course_id: string; position: number; course: { id: string; name: string } }> }>>([]);
 
   useEffect(() => {
@@ -557,36 +555,22 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser, oppsB
 
   useEffect(() => { if (view === "kanban") setSelectedIds(new Set()); }, [view]);
 
-  function toggleId(id: string) {
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  }
+  // ── Drag & drop ────────────────────────────────────────────────────────────
+  const [dragId,   setDragId]   = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState<string | null>(null);
+  const [, startTransition]     = useTransition();
 
-  function toggleAll() {
-    setSelectedIds(prev =>
-      prev.size === filteredOpps.length
-        ? new Set()
-        : new Set(filteredOpps.map(o => o.id))
-    );
-  }
-
-  // ── Drag & drop state ──────────────────────────────────────────────────────
-  const [dragId, setDragId]             = useState<string | null>(null);
-  const [dragOver, setDragOver]         = useState<string | null>(null);
-  const [stageOverrides, setStageOverrides] = useState<Record<string, string>>({});
-  const [, startTransition]             = useTransition();
+  const pipeline   = pipelines.find(p => p.id === activePipelineId);
+  const allOpps    = Object.values(stageData).flatMap(s => s.opps);
+  const visibleOpps = allOpps.filter(o => o.status !== "won");
 
   function handleDragStart(opp: OppEnriched) {
     setDragId(opp.id);
   }
 
   function handleDragOver(stageId: string) {
-    const opp         = visibleOpps.find(o => o.id === dragId);
+    const opp         = allOpps.find(o => o.id === dragId);
     const targetStage = pipeline?.stages.find(s => s.id === stageId);
-    // Don't highlight if move would be blocked
     if (
       opp &&
       isProspectionStage(opp.pipelineStageName) &&
@@ -603,10 +587,10 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser, oppsB
   function handleDrop(stageId: string) {
     if (!dragId) { setDragOver(null); return; }
 
-    const opp         = visibleOpps.find(o => o.id === dragId);
-    const targetStage = pipeline?.stages.find(s => s.id === stageId);
+    const opp           = allOpps.find(o => o.id === dragId);
+    const sourceStageId = opp?.pipelineStageId;
+    const targetStage   = pipeline?.stages.find(s => s.id === stageId);
 
-    // Bloquear salida de prospección sin ficha rellena
     if (
       opp &&
       isProspectionStage(opp.pipelineStageName) &&
@@ -619,50 +603,60 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser, oppsB
       return;
     }
 
-    const id   = dragId;
-    const prev = { ...stageOverrides };
+    const id = dragId;
     setDragId(null);
     setDragOver(null);
-    setStageOverrides(p => ({ ...p, [id]: stageId }));
+
+    if (!opp || !sourceStageId || sourceStageId === stageId) return;
+
+    const newStageName = targetStage?.name ?? opp.pipelineStageName;
+    const movedOpp     = { ...opp, pipelineStageId: stageId, pipelineStageName: newStageName };
+
+    // Optimistic move between stage buckets
+    setStageData(prev => {
+      const next = { ...prev };
+      if (next[sourceStageId]) {
+        next[sourceStageId] = { ...next[sourceStageId], opps: next[sourceStageId].opps.filter(o => o.id !== id) };
+      }
+      if (next[stageId]) {
+        next[stageId] = { ...next[stageId], opps: [movedOpp, ...next[stageId].opps] };
+      }
+      return next;
+    });
 
     startTransition(async () => {
       const res = await moveOppToStage(
         id,
         stageId,
-        opp?.contact.id,
-        opp?.pipelineStageName ?? undefined,
+        opp.contact.id,
+        opp.pipelineStageName ?? undefined,
         targetStage?.name ?? undefined,
       );
       if ("error" in res) {
         toast.error("No se pudo mover el lead");
-        setStageOverrides(prev);
+        // Revert optimistic move
+        setStageData(prev => {
+          const next = { ...prev };
+          if (next[stageId]) {
+            next[stageId] = { ...next[stageId], opps: next[stageId].opps.filter(o => o.id !== id) };
+          }
+          if (next[sourceStageId]) {
+            next[sourceStageId] = { ...next[sourceStageId], opps: [opp, ...next[sourceStageId].opps] };
+          }
+          return next;
+        });
       }
     });
   }
 
-  const pipeline  = pipelines.find(p => p.id === activePipelineId);
-  const allOpps   = [
-    ...(initialOpps[activePipelineId] ?? []),
-    ...(extraOpps[activePipelineId]   ?? []),
-  ];
-  // Exclude won (matriculados) — lost/abandoned still show in their columns
-  const visibleOpps = allOpps.filter(o => o.status !== "won");
-
-  // Apply stageOverrides — update both pipelineStageId AND pipelineStageName
-  const resolvedOpps = visibleOpps.map(o => {
-    const newStageId = stageOverrides[o.id];
-    if (!newStageId) return o;
-    const newStageName = pipeline?.stages.find(s => s.id === newStageId)?.name ?? o.pipelineStageName;
-    return { ...o, pipelineStageId: newStageId, pipelineStageName: newStageName };
-  });
-
-  const cursoOptions  = [...new Set(resolvedOpps.map(o => o.cursoValue).filter(Boolean) as string[])].sort();
+  // ── Derived data ───────────────────────────────────────────────────────────
+  const cursoOptions  = [...new Set(visibleOpps.map(o => o.cursoValue).filter(Boolean) as string[])].sort();
   const memberOptions = [...new Set([
-    ...resolvedOpps.map(o => o.setter_name).filter(Boolean) as string[],
-    ...resolvedOpps.map(o => o.closer_name).filter(Boolean) as string[],
+    ...visibleOpps.map(o => o.setter_name).filter(Boolean) as string[],
+    ...visibleOpps.map(o => o.closer_name).filter(Boolean) as string[],
   ])].sort();
 
-  const filteredOpps = resolvedOpps.filter(o => {
+  const filteredOpps = visibleOpps.filter(o => {
     if (filterStageId && o.pipelineStageId !== filterStageId) return false;
     if (filterCurso   && o.cursoValue !== filterCurso)        return false;
     if (filterMember  && o.setter_name !== filterMember && o.closer_name !== filterMember) return false;
@@ -677,7 +671,7 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser, oppsB
 
   const hasFilters = !!(filterStageId || filterCurso || filterMember || filterSearch);
 
-  // Build phase → stages map
+  // Phase → stages mapping
   const stagesByPhase = PHASES.map(phase => ({
     phase,
     stages: (pipeline?.stages ?? []).filter(s =>
@@ -691,21 +685,29 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser, oppsB
   const matchedIds      = new Set(stagesByPhase.flatMap(x => x.stages.map(s => s.id)));
   const unmatchedStages = (pipeline?.stages ?? []).filter(s => !matchedIds.has(s.id));
 
-  const dragHandlers = {
-    onDragStart:  handleDragStart,
-    onDrop:       handleDrop,
-    onDragOver:   handleDragOver,
-    onDragLeave:  handleDragLeave,
-    dragOver,
-  };
+  function toggleId(id: string) {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
 
+  function toggleAll() {
+    setSelectedIds(prev =>
+      prev.size === filteredOpps.length
+        ? new Set()
+        : new Set(filteredOpps.map(o => o.id))
+    );
+  }
+
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col gap-5 h-full">
 
-      {/* ── Top bar: KPIs + toolbar ── */}
+      {/* ── Top bar ── */}
       <div className="flex items-center gap-4 flex-wrap">
 
-        {/* Nuevo lead */}
         <button
           onClick={() => setNewLeadOpen(true)}
           className="cursor-pointer flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-700 transition-colors shadow-sm"
@@ -714,7 +716,6 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser, oppsB
           Nuevo lead
         </button>
 
-        {/* Buscador */}
         <div className="relative">
           <input
             type="text"
@@ -728,7 +729,6 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser, oppsB
           </svg>
         </div>
 
-        {/* Filtros lista */}
         {view === "list" && (
           <div className="flex items-center gap-2 flex-wrap">
             <select
@@ -772,7 +772,6 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser, oppsB
           </div>
         )}
 
-        {/* Asignación masiva — solo en modo lista con selección */}
         {view === "list" && selectedIds.size > 0 && (
           <div className="relative">
             <button
@@ -799,6 +798,7 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser, oppsB
                         } else {
                           toast.success(`Setter asignado a ${res.count} leads`);
                           setSelectedIds(new Set());
+                          setVersion(v => v + 1);
                           router.refresh();
                         }
                       });
@@ -816,10 +816,8 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser, oppsB
           </div>
         )}
 
-        {/* Spacer */}
         <div className="flex-1" />
 
-        {/* Zone + view controls */}
         <div className="flex items-center gap-2">
           {pipelines.length > 1 && (
             <select
@@ -832,7 +830,10 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser, oppsB
           )}
 
           <div className="flex items-center gap-1.5 text-xs text-slate-400 font-medium px-2">
-            {allOpps.filter(o => o.status === "open").length} leads activos
+            {Object.values(stageData).some(e => e.loading && e.total === null)
+              ? "…"
+              : Object.values(stageData).reduce((sum, e) => sum + (e.total ?? 0), 0)
+            } leads
           </div>
 
           <div className="flex rounded-xl border border-slate-200 bg-white overflow-hidden">
@@ -855,18 +856,16 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser, oppsB
       {/* ── Kanban / List ── */}
       {view === "kanban" ? (
         <div className="overflow-x-auto pb-4 flex-1">
-          <div className="flex gap-0 items-start" style={{ minWidth: "max-content", height: "calc(100vh - 220px)" }}>
+          <div className="flex gap-0 items-start" style={{ minWidth: "max-content" }}>
             {stagesByPhase.map(({ phase, stages }, pi) =>
               stages.length > 0 ? (
                 <div key={phase.id} className="flex items-start gap-2.5">
-                  {/* Phase separator — thin vertical line with label */}
                   {pi > 0 && (
                     <div className="flex flex-col items-center self-stretch pt-1 px-1">
                       <div className="w-px flex-1 bg-slate-200" />
                     </div>
                   )}
                   <div className="flex flex-col gap-2 pr-1">
-                    {/* Phase label above the group */}
                     <p className={cn("text-[9px] font-black uppercase tracking-widest px-1", phase.color)}>
                       {phase.label}
                     </p>
@@ -876,6 +875,9 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser, oppsB
                           key={stage.id}
                           stage={stage}
                           opps={filteredOpps.filter(o => o.pipelineStageId === stage.id)}
+                          total={stageData[stage.id]?.total ?? null}
+                          loadingMore={stageData[stage.id]?.loading ?? false}
+                          onScrollBottom={() => loadMoreForStage(stage.id)}
                           onOpen={setSheetOpp}
                           onDragStart={handleDragStart}
                           onDrop={handleDrop}
@@ -894,6 +896,9 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser, oppsB
                 key={stage.id}
                 stage={stage}
                 opps={filteredOpps.filter(o => o.pipelineStageId === stage.id)}
+                total={stageData[stage.id]?.total ?? null}
+                loadingMore={stageData[stage.id]?.loading ?? false}
+                onScrollBottom={() => loadMoreForStage(stage.id)}
                 onOpen={setSheetOpp}
                 onDragStart={handleDragStart}
                 onDrop={handleDrop}
@@ -920,17 +925,6 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser, oppsB
         />
       )}
 
-      {/* ── Auto-carga en curso ── */}
-      {autoLoading && (
-        <div className="flex items-center justify-center gap-2 py-2 text-xs text-slate-400">
-          <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
-          </svg>
-          Cargando más leads… ({allOpps.length} cargados)
-        </div>
-      )}
-
       {sheetOpp && (
         <LeadSheet
           opp={sheetOpp}
@@ -942,9 +936,24 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser, oppsB
           formations={formations}
           currentUser={currentUser}
           onClose={() => setSheetOpp(null)}
-          onAction={() => { setSheetOpp(null); router.refresh(); }}
+          onAction={() => { setSheetOpp(null); setVersion(v => v + 1); }}
           onStageChange={(oppId, newStageId, newStageName) => {
-            setStageOverrides(p => ({ ...p, [oppId]: newStageId }));
+            // Move the opp in stageData optimistically (same as DnD)
+            const opp = allOpps.find(o => o.id === oppId);
+            if (!opp) return;
+            const sourceStageId = opp.pipelineStageId;
+            if (sourceStageId === newStageId) return;
+            const movedOpp = { ...opp, pipelineStageId: newStageId, pipelineStageName: newStageName };
+            setStageData(prev => {
+              const next = { ...prev };
+              if (next[sourceStageId]) {
+                next[sourceStageId] = { ...next[sourceStageId], opps: next[sourceStageId].opps.filter(o => o.id !== oppId) };
+              }
+              if (next[newStageId]) {
+                next[newStageId] = { ...next[newStageId], opps: [movedOpp, ...next[newStageId].opps] };
+              }
+              return next;
+            });
             setSheetOpp(prev => prev?.id === oppId
               ? { ...prev, pipelineStageId: newStageId, pipelineStageName: newStageName }
               : prev

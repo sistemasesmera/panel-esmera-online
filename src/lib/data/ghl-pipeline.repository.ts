@@ -146,6 +146,21 @@ export async function getEnrichedOppsFromCache(
   return enrichOpps(opps, pipeline, currentUser);
 }
 
+// Leads de una etapa concreta — 20 por página para carga por columna
+export async function fetchStageLeads(
+  pipelineId:  string,
+  stageId:     string,
+  pipeline:    GhlPipeline,
+  currentUser: PipelineUser,
+  page:        number,
+): Promise<{ opps: OppEnriched[]; total: number | null; nextPage: number | null }> {
+  const { opps: raw, total, nextPage } = await fetchGhlOpportunitiesPage(
+    pipelineId, page, { stageId, limit: 20 },
+  );
+  const opps = await enrichOpps(raw, pipeline, currentUser);
+  return { opps, total, nextPage };
+}
+
 // Primera página (100 leads) — rápido para el servidor. El resto se carga client-side.
 export async function fetchPipelineLeads(
   pipelineId:  string,

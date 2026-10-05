@@ -106,27 +106,32 @@ export async function fetchGhlOpportunities(
   return all;
 }
 
-// Una página de 100 leads — cursor es el número de página (1-based)
+// Una página — cursor por número de página, filtro opcional por etapa
 export async function fetchGhlOpportunitiesPage(
   pipelineId: string,
-  page = 1,
-): Promise<{ opps: GhlOpportunity[]; nextPage: number | null }> {
+  page  = 1,
+  opts: { stageId?: string; limit?: number } = {},
+): Promise<{ opps: GhlOpportunity[]; total: number | null; nextPage: number | null }> {
   const locationId = process.env.GHL_LOCATION_ID;
   if (!locationId) throw new Error("GHL_LOCATION_ID not set");
   if (!process.env.GHL_API_KEY) throw new Error("GHL_API_KEY not set");
 
+  const limit = opts.limit ?? 100;
+
   const url = new URL(`${GHL_API_BASE}/opportunities/search`);
   url.searchParams.set("location_id", locationId);
   url.searchParams.set("pipeline_id", pipelineId);
-  url.searchParams.set("limit", "100");
+  url.searchParams.set("limit", String(limit));
   url.searchParams.set("page", String(page));
+  if (opts.stageId) url.searchParams.set("pipeline_stage_id", opts.stageId);
 
   const res = await ghlFetch(url.toString(), { headers: ghlHeaders(), cache: "no-store" });
   if (!res.ok) throw new Error(`GHL opportunities error ${res.status}: ${await res.text()}`);
   const data = await res.json();
-  const opps = (data.opportunities ?? []) as GhlOpportunity[];
-  const nextPage = opps.length >= 100 ? page + 1 : null;
-  return { opps, nextPage };
+  const opps  = (data.opportunities ?? []) as GhlOpportunity[];
+  const total    = (data.meta?.total ?? null) as number | null;
+  const nextPage = opps.length >= limit ? page + 1 : null;
+  return { opps, total, nextPage };
 }
 
 export async function fetchGhlOpportunity(id: string): Promise<GhlOpportunity | null> {
