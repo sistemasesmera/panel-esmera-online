@@ -111,14 +111,38 @@ async function enrichOpps(
   );
 }
 
+// Sync completo — todas las páginas. Usar en background (es lento).
 export async function syncPipelineToCache(pipelineId: string): Promise<void> {
   await acquireSyncLock(pipelineId);
   try {
     const opps = await fetchGhlOpportunities(pipelineId);
     await upsertOpportunitiesCache(pipelineId, opps);
+  } catch (e) {
+    // No liberar el lock en error — que expire solo (2 min) para evitar bucles rápidos
+    console.error("[pipeline] sync failed:", e);
+    throw e;
+  }
+}
+
+// Sync rápido — solo primera página (100 leads). Seguro para respuesta síncrona.
+export async function syncFirstPageToCache(pipelineId: string): Promise<void> {
+  await acquireSyncLock(pipelineId);
+  try {
+    const opps = await fetchGhlOpportunities(pipelineId, 100);
+    await upsertOpportunitiesCache(pipelineId, opps);
   } finally {
     await releaseSyncLock(pipelineId).catch(() => {});
   }
+}
+
+// Solo lectura + enriquecimiento desde caché — no hace ningún sync
+export async function getEnrichedOppsFromCache(
+  pipelineId:  string,
+  pipeline:    GhlPipeline,
+  currentUser: PipelineUser,
+): Promise<OppEnriched[]> {
+  const opps = await getOpportunitiesFromCache(pipelineId);
+  return enrichOpps(opps, pipeline, currentUser);
 }
 
 // Devuelve solo la estructura (pipelines + fieldDefs) — no toca GHL leads, es rápido

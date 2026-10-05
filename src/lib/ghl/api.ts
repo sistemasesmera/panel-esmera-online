@@ -74,7 +74,10 @@ export async function fetchGhlPipelines(): Promise<GhlPipeline[]> {
   return (data.pipelines ?? []) as GhlPipeline[];
 }
 
-export async function fetchGhlOpportunities(pipelineId: string): Promise<GhlOpportunity[]> {
+export async function fetchGhlOpportunities(
+  pipelineId: string,
+  maxResults = Infinity,
+): Promise<GhlOpportunity[]> {
   const locationId = process.env.GHL_LOCATION_ID;
   if (!locationId) throw new Error("GHL_LOCATION_ID not set");
   if (!process.env.GHL_API_KEY) throw new Error("GHL_API_KEY not set");
@@ -95,6 +98,7 @@ export async function fetchGhlOpportunities(pipelineId: string): Promise<GhlOppo
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const page = (data.opportunities ?? []) as any[] as GhlOpportunity[];
     all.push(...page);
+    if (all.length >= maxResults) break;
     startAfterId = data.meta?.startAfterId ?? undefined;
     if (page.length < 100) break;
   } while (startAfterId);

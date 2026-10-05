@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { after } from "next/server";
 import { getCurrentUser } from "@/lib/auth/get-current-user";
 import { fetchGhlPipelines } from "@/lib/ghl/api";
-import { fetchEnrichedPipelineOpps, syncPipelineToCache } from "@/lib/data/ghl-pipeline.repository";
+import {
+  syncFirstPageToCache,
+  syncPipelineToCache,
+  getEnrichedOppsFromCache,
+} from "@/lib/data/ghl-pipeline.repository";
 import { getCacheState } from "@/lib/data/ghl-cache.repository";
 import type { AppRole } from "@/lib/domain/shared/permissions";
 
@@ -16,22 +19,29 @@ export async function GET(req: NextRequest) {
   try {
     const state = await getCacheState(pipelineId);
 
-    // Primera visita — caché vacía: responder vacío al instante y sincronizar en background
     if (state.isEmpty) {
-      if (!state.isLocked) {
-        after(async () => {
-          try { await syncPipelineToCache(pipelineId); }
-          catch (e) { console.error("[pipeline] initial sync failed:", e); }
-        });
+      if (state.isLocked) {
+        // Sync ya en curso — esperar en el cliente
+        return NextResponse.json({ opps: [], syncing: true });
       }
-      return NextResponse.json({ opps: [], syncing: true });
+      // Primera carga: sync rápido (~2s, primera página)
+      await syncFirstPageToCache(pipelineId);
+      // Sync completo en background — fire and forget sin after()
+      void syncPipelineToCache(pipelineId).catch(e =>
+        console.error("[pipeline] full bg sync failed:", e)
+      );
+    } else if (state.isStale && !state.isLocked) {
+      // Caché obsoleta — refrescar en background sin bloquear
+      void syncPipelineToCache(pipelineId).catch(e =>
+        console.error("[pipeline] bg refresh failed:", e)
+      );
     }
 
     const allPipelines = await fetchGhlPipelines();
     const pipeline     = allPipelines.find(p => p.id === pipelineId);
     if (!pipeline) return NextResponse.json({ error: "Pipeline no encontrado" }, { status: 404 });
 
-    const opps = await fetchEnrichedPipelineOpps(pipelineId, pipeline, {
+    const opps = await getEnrichedOppsFromCache(pipelineId, pipeline, {
       id:   user.id,
       role: user.role as AppRole,
     });
