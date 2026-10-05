@@ -1,12 +1,12 @@
 "use client";
 import { useState, useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { LayoutGrid, List, ArrowRight, GraduationCap, Mail, Clock, CalendarPlus, Flame, Thermometer, Snowflake, Plus } from "lucide-react";
+import { LayoutGrid, List, ArrowRight, GraduationCap, Mail, Clock, CalendarPlus, Flame, Thermometer, Snowflake, Plus, UserCheck } from "lucide-react";
 import { toast } from "sonner";
 import { LeadSheet } from "./lead-sheet";
 import { NewLeadModal } from "./new-lead-modal";
 import { cn, fmt } from "@/lib/utils";
-import { moveOppToStage } from "@/app/(app)/crm/pipeline/actions";
+import { moveOppToStage, bulkAssignSetter } from "@/app/(app)/crm/pipeline/actions";
 import type { GhlPipeline, GhlPipelineStage, OppEnriched } from "@/lib/data/ghl-pipeline.repository";
 
 // ── Stage config ──────────────────────────────────────────────────────────────
@@ -321,7 +321,15 @@ function PhaseGroup({
 }
 
 // ── ListView ──────────────────────────────────────────────────────────────────
-function ListView({ opps, onOpen }: { opps: OppEnriched[]; onOpen: (opp: OppEnriched) => void }) {
+function ListView({
+  opps, onOpen, selectedIds, onToggleId, onToggleAll,
+}: {
+  opps:        OppEnriched[];
+  onOpen:      (opp: OppEnriched) => void;
+  selectedIds: Set<string>;
+  onToggleId:  (id: string) => void;
+  onToggleAll: () => void;
+}) {
   const STATUS_CLS: Record<string, string> = {
     open:      "bg-emerald-50 text-emerald-600 ring-1 ring-emerald-200/60",
     won:       "bg-green-50 text-green-600 ring-1 ring-green-200/60",
@@ -332,11 +340,21 @@ function ListView({ opps, onOpen }: { opps: OppEnriched[]; onOpen: (opp: OppEnri
     open: "Abierta", won: "Ganada", lost: "Perdida", abandoned: "Abandonada",
   };
 
+  const allChecked = opps.length > 0 && selectedIds.size === opps.length;
+
   return (
     <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden card-shadow">
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-slate-100 bg-slate-50/80">
+            <th className="px-4 py-3.5 w-10">
+              <input
+                type="checkbox"
+                checked={allChecked}
+                onChange={onToggleAll}
+                className="h-3.5 w-3.5 rounded border-slate-300 accent-indigo-600"
+              />
+            </th>
             <th className="text-left px-5 py-3.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Contacto</th>
             <th className="text-left px-5 py-3.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Etapa</th>
             <th className="text-left px-5 py-3.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Curso</th>
@@ -351,8 +369,17 @@ function ListView({ opps, onOpen }: { opps: OppEnriched[]; onOpen: (opp: OppEnri
           {opps.map(opp => {
             const cfg       = getStageCfg(opp.pipelineStageName ?? "");
             const avatarIdx = ([...(opp.contact.name ?? "")][0]?.codePointAt(0) ?? 0) % 5;
+            const isSelected = selectedIds.has(opp.id);
             return (
-              <tr key={opp.id} className="hover:bg-slate-50/70 transition-colors">
+              <tr key={opp.id} className={cn("hover:bg-slate-50/70 transition-colors", isSelected && "bg-indigo-50/60")}>
+                <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                  <input
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={() => onToggleId(opp.id)}
+                    className="h-3.5 w-3.5 rounded border-slate-300 accent-indigo-600"
+                  />
+                </td>
                 <td className="px-5 py-3">
                   <div className="flex items-center gap-2.5">
                     <div className={cn(
@@ -436,9 +463,15 @@ export function PipelineKanban({ pipelines, oppsByPipeline, formQuestionDefs, cu
   const [sheetOpp, setSheetOpp]   = useState<OppEnriched | null>(null);
   const [newLeadOpen, setNewLeadOpen] = useState(false);
 
+  const [filterSearch,  setFilterSearch]  = useState("");
   const [filterStageId, setFilterStageId] = useState("");
   const [filterCurso,   setFilterCurso]   = useState("");
   const [filterMember,  setFilterMember]  = useState("");
+
+  const [selectedIds,  setSelectedIds]  = useState<Set<string>>(new Set());
+  const [setterList,   setSetterList]   = useState<Array<{ id: string; full_name: string }>>([]);
+  const [bulkOpen,     setBulkOpen]     = useState(false);
+  const [, startBulkTransition]         = useTransition();
 
   const [shared, setShared] = useState<SharedData>({ courses: [], platforms: [], tutors: [] });
   const [formations, setFormations] = useState<Array<{ id: string; name: string; courses: Array<{ course_id: string; position: number; course: { id: string; name: string } }> }>>([]);
@@ -449,11 +482,31 @@ export function PipelineKanban({ pipelines, oppsByPipeline, formQuestionDefs, cu
       fetch("/api/platforms").then(r => r.ok ? r.json() : []),
       fetch("/api/tutors").then(r => r.ok ? r.json() : []),
       fetch("/api/formations").then(r => r.ok ? r.json() : []),
-    ]).then(([courses, platforms, tutors, fmts]) => {
+      fetch("/api/team?role=setter").then(r => r.ok ? r.json() : []),
+    ]).then(([courses, platforms, tutors, fmts, setters]) => {
       setShared({ courses, platforms, tutors });
       setFormations(fmts);
+      setSetterList(setters);
     }).catch(() => {});
   }, []);
+
+  useEffect(() => { if (view === "kanban") setSelectedIds(new Set()); }, [view]);
+
+  function toggleId(id: string) {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAll() {
+    setSelectedIds(prev =>
+      prev.size === filteredOpps.length
+        ? new Set()
+        : new Set(filteredOpps.map(o => o.id))
+    );
+  }
 
   // ── Drag & drop state ──────────────────────────────────────────────────────
   const [dragId, setDragId]             = useState<string | null>(null);
@@ -545,10 +598,16 @@ export function PipelineKanban({ pipelines, oppsByPipeline, formQuestionDefs, cu
     if (filterStageId && o.pipelineStageId !== filterStageId) return false;
     if (filterCurso   && o.cursoValue !== filterCurso)        return false;
     if (filterMember  && o.setter_name !== filterMember && o.closer_name !== filterMember) return false;
+    if (filterSearch) {
+      const q = filterSearch.toLowerCase();
+      const nameMatch  = o.contact.name?.toLowerCase().includes(q);
+      const phoneMatch = o.contact.phone?.replace(/\s/g, "").includes(q.replace(/\s/g, ""));
+      if (!nameMatch && !phoneMatch) return false;
+    }
     return true;
   });
 
-  const hasFilters = !!(filterStageId || filterCurso || filterMember);
+  const hasFilters = !!(filterStageId || filterCurso || filterMember || filterSearch);
 
   // Build phase → stages map
   const stagesByPhase = PHASES.map(phase => ({
@@ -586,6 +645,20 @@ export function PipelineKanban({ pipelines, oppsByPipeline, formQuestionDefs, cu
           <Plus className="h-3.5 w-3.5" />
           Nuevo lead
         </button>
+
+        {/* Buscador */}
+        <div className="relative">
+          <input
+            type="text"
+            value={filterSearch}
+            onChange={e => setFilterSearch(e.target.value)}
+            placeholder="Buscar por nombre o teléfono…"
+            className="text-xs border border-slate-200 rounded-xl pl-8 pr-3 py-2 bg-white text-slate-700 w-56 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 placeholder:text-slate-400"
+          />
+          <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+          </svg>
+        </div>
 
         {/* Filtros lista */}
         {view === "list" && (
@@ -627,6 +700,50 @@ export function PipelineKanban({ pipelines, oppsByPipeline, formQuestionDefs, cu
               >
                 Limpiar
               </button>
+            )}
+          </div>
+        )}
+
+        {/* Asignación masiva — solo en modo lista con selección */}
+        {view === "list" && selectedIds.size > 0 && (
+          <div className="relative">
+            <button
+              onClick={() => setBulkOpen(v => !v)}
+              className="cursor-pointer flex items-center gap-1.5 rounded-xl bg-sky-600 px-4 py-2 text-xs font-semibold text-white hover:bg-sky-700 transition-colors shadow-sm"
+            >
+              <UserCheck className="h-3.5 w-3.5" />
+              Asignar setter ({selectedIds.size})
+            </button>
+            {bulkOpen && (
+              <div className="absolute top-full left-0 mt-1 w-52 bg-white rounded-xl border border-slate-200 shadow-lg z-50 py-1">
+                {setterList.map(s => (
+                  <button
+                    key={s.id}
+                    onClick={() => {
+                      setBulkOpen(false);
+                      startBulkTransition(async () => {
+                        const leads = filteredOpps
+                          .filter(o => selectedIds.has(o.id))
+                          .map(o => ({ contactId: o.contact.id, oppId: o.id }));
+                        const res = await bulkAssignSetter(leads, s.id, s.full_name);
+                        if ("error" in res) {
+                          toast.error(`Error: ${res.error}`);
+                        } else {
+                          toast.success(`Setter asignado a ${res.count} leads`);
+                          setSelectedIds(new Set());
+                          router.refresh();
+                        }
+                      });
+                    }}
+                    className="w-full cursor-pointer text-left px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+                  >
+                    {s.full_name}
+                  </button>
+                ))}
+                {setterList.length === 0 && (
+                  <p className="px-4 py-3 text-xs text-slate-400">Sin setters disponibles</p>
+                )}
+              </div>
             )}
           </div>
         )}
@@ -690,7 +807,7 @@ export function PipelineKanban({ pipelines, oppsByPipeline, formQuestionDefs, cu
                         <KanbanColumn
                           key={stage.id}
                           stage={stage}
-                          opps={resolvedOpps.filter(o => o.pipelineStageId === stage.id)}
+                          opps={filteredOpps.filter(o => o.pipelineStageId === stage.id)}
                           onOpen={setSheetOpp}
                           onDragStart={handleDragStart}
                           onDrop={handleDrop}
@@ -708,7 +825,7 @@ export function PipelineKanban({ pipelines, oppsByPipeline, formQuestionDefs, cu
               <KanbanColumn
                 key={stage.id}
                 stage={stage}
-                opps={resolvedOpps.filter(o => o.pipelineStageId === stage.id)}
+                opps={filteredOpps.filter(o => o.pipelineStageId === stage.id)}
                 onOpen={setSheetOpp}
                 onDragStart={handleDragStart}
                 onDrop={handleDrop}
@@ -720,7 +837,13 @@ export function PipelineKanban({ pipelines, oppsByPipeline, formQuestionDefs, cu
           </div>
         </div>
       ) : (
-        <ListView opps={filteredOpps} onOpen={setSheetOpp} />
+        <ListView
+          opps={filteredOpps}
+          onOpen={setSheetOpp}
+          selectedIds={selectedIds}
+          onToggleId={toggleId}
+          onToggleAll={toggleAll}
+        />
       )}
 
       {sheetOpp && (

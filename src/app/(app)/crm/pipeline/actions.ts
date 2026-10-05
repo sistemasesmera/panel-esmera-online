@@ -745,3 +745,39 @@ export async function updateLeadContactInfo(
   }
 }
 
+export async function bulkAssignSetter(
+  leads:      Array<{ contactId: string; oppId: string }>,
+  memberId:   string,
+  memberName: string,
+): Promise<{ success: true; count: number } | { error: string }> {
+  await requireCapability("viewPipeline");
+  const user  = await requireAuth();
+  const db    = createAdminClient() as any;
+  const actor = user.fullName ?? user.email ?? "Sistema";
+
+  const { error } = await db.from("lead_profiles").upsert(
+    leads.map(({ contactId }) => ({
+      ghl_contact_id: contactId,
+      setter_id:      memberId,
+      setter_name:    memberName,
+    })),
+    { onConflict: "ghl_contact_id" },
+  );
+  if (error) return { error: error.message };
+
+  await Promise.allSettled(
+    leads.map(({ contactId, oppId }) =>
+      db.from("lead_notes").insert({
+        ghl_contact_id:     contactId,
+        ghl_opportunity_id: oppId,
+        type:               "nota",
+        content:            `👤 Setter asignado en masa: ${memberName} (por ${actor})`,
+        created_by:         user.id,
+        created_by_name:    actor,
+      })
+    )
+  );
+
+  return { success: true, count: leads.length };
+}
+
