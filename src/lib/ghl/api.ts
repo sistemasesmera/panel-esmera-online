@@ -202,6 +202,26 @@ export async function searchGhlOpportunitiesByPhone(phone: string): Promise<GhlO
   return (data.opportunities ?? []) as GhlOpportunity[];
 }
 
+export async function searchGhlOpportunitiesInPipeline(
+  pipelineId: string,
+  q: string,
+  limit = 25,
+): Promise<GhlOpportunity[]> {
+  const locationId = process.env.GHL_LOCATION_ID;
+  if (!locationId || !process.env.GHL_API_KEY) return [];
+
+  const url = new URL(`${GHL_API_BASE}/opportunities/search`);
+  url.searchParams.set("location_id", locationId);
+  url.searchParams.set("pipeline_id", pipelineId);
+  url.searchParams.set("q", q);
+  url.searchParams.set("limit", String(limit));
+
+  const res = await ghlFetch(url.toString(), { headers: ghlHeaders(), cache: "no-store" });
+  if (!res.ok) throw new Error(`GHL search error ${res.status}: ${await res.text()}`);
+  const data = await res.json();
+  return (data.opportunities ?? []) as GhlOpportunity[];
+}
+
 // GHL service calendars expect local datetime strings (no Z suffix) + selectedTimezone
 function toLocalDateTimeString(date: Date, tz = "Europe/Madrid"): string {
   return date.toLocaleString("sv-SE", { timeZone: tz }).replace(" ", "T");

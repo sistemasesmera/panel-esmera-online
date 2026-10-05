@@ -463,6 +463,26 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser }: Pro
   const [filterCurso,   setFilterCurso]   = useState("");
   const [filterMember,  setFilterMember]  = useState("");
 
+  // Búsqueda GHL en tiempo real (debounce 400ms)
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchResults, setSearchResults] = useState<OppEnriched[] | null>(null);
+
+  useEffect(() => {
+    const q = filterSearch.trim();
+    if (!q) { setSearchResults(null); setSearchLoading(false); return; }
+
+    setSearchLoading(true);
+    setSearchResults(null);
+    const t = setTimeout(() => {
+      fetch(`/api/ghl/pipeline/search?pipelineId=${activePipelineId}&q=${encodeURIComponent(q)}`)
+        .then(r => r.ok ? r.json() : Promise.reject(r))
+        .then((data: { opps: OppEnriched[] }) => { setSearchResults(data.opps); setSearchLoading(false); })
+        .catch(() => setSearchLoading(false));
+    }, 400);
+
+    return () => clearTimeout(t);
+  }, [filterSearch, activePipelineId]);
+
   const [selectedIds,  setSelectedIds]  = useState<Set<string>>(new Set());
   const [setterList,   setSetterList]   = useState<Array<{ id: string; full_name: string }>>([]);
   const [bulkOpen,     setBulkOpen]     = useState(false);
@@ -721,12 +741,25 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser }: Pro
             type="text"
             value={filterSearch}
             onChange={e => setFilterSearch(e.target.value)}
-            placeholder="Buscar por nombre o teléfono…"
-            className="text-xs border border-slate-200 rounded-xl pl-8 pr-3 py-2 bg-white text-slate-700 w-56 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 placeholder:text-slate-400"
+            placeholder="Buscar en todos los leads…"
+            className="text-xs border border-slate-200 rounded-xl pl-8 pr-7 py-2 bg-white text-slate-700 w-60 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 placeholder:text-slate-400"
           />
-          <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
-          </svg>
+          {searchLoading
+            ? <Spinner className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+            : <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+              </svg>
+          }
+          {filterSearch && (
+            <button
+              onClick={() => setFilterSearch("")}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+            >
+              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
         </div>
 
         {view === "list" && (
@@ -853,8 +886,41 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser }: Pro
         </div>
       </div>
 
+      {/* ── Resultados de búsqueda ── */}
+      {filterSearch.trim() && (
+        <div className="flex flex-col gap-3">
+          <p className="text-xs text-slate-400">
+            {searchLoading
+              ? "Buscando en GHL…"
+              : searchResults
+                ? `${searchResults.length} resultado${searchResults.length !== 1 ? "s" : ""} para "${filterSearch}"`
+                : ""
+            }
+          </p>
+          {searchResults && searchResults.length > 0 && (
+            <ListView
+              opps={searchResults}
+              onOpen={setSheetOpp}
+              selectedIds={new Set()}
+              onToggleId={() => {}}
+              onToggleAll={() => {}}
+              sortDir="desc"
+              onToggleSort={() => {}}
+            />
+          )}
+          {searchResults && searchResults.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-16 gap-2 text-slate-400">
+              <svg className="h-8 w-8 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+              </svg>
+              <p className="text-sm">Sin resultados en GHL para &ldquo;{filterSearch}&rdquo;</p>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── Kanban / List ── */}
-      {view === "kanban" ? (
+      {!filterSearch.trim() && view === "kanban" ? (
         <div className="overflow-x-auto pb-4 flex-1">
           <div className="flex gap-0 items-start" style={{ minWidth: "max-content" }}>
             {stagesByPhase.map(({ phase, stages }, pi) =>
@@ -909,7 +975,7 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser }: Pro
             ))}
           </div>
         </div>
-      ) : (
+      ) : !filterSearch.trim() ? (
         <ListView
           opps={[...filteredOpps].sort((a, b) => {
             const ta = new Date(a.createdAt).getTime();
@@ -923,7 +989,7 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser }: Pro
           sortDir={sortDir}
           onToggleSort={() => setSortDir(d => d === "desc" ? "asc" : "desc")}
         />
-      )}
+      ) : null}
 
       {sheetOpp && (
         <LeadSheet

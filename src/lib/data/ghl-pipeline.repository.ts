@@ -5,6 +5,7 @@ import {
   fetchGhlOpportunities,
   fetchGhlOpportunitiesPage,
   fetchGhlCustomFieldDefs,
+  searchGhlOpportunitiesInPipeline,
   type GhlPipeline,
   type GhlPipelineStage,
   type GhlOpportunity,
@@ -182,6 +183,17 @@ export async function fetchMorePipelineLeads(
   const { opps: raw, nextPage } = await fetchGhlOpportunitiesPage(pipelineId, page);
   const opps = await enrichOpps(raw, pipeline, currentUser);
   return { opps, nextPage };
+}
+
+// Búsqueda por texto en GHL — nombre, email, teléfono
+export async function searchPipelineLeads(
+  pipelineId:  string,
+  pipeline:    GhlPipeline,
+  currentUser: PipelineUser,
+  q:           string,
+): Promise<OppEnriched[]> {
+  const raw = await searchGhlOpportunitiesInPipeline(pipelineId, q);
+  return enrichOpps(raw, pipeline, currentUser);
 }
 
 // Devuelve solo la estructura (pipelines + fieldDefs) — no toca GHL leads, es rápido
