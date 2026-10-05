@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useTransition } from "react";
+import { useState, useEffect, useTransition, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { LayoutGrid, List, ArrowRight, GraduationCap, Mail, Clock, CalendarPlus, Flame, Thermometer, Snowflake, Plus, UserCheck, ChevronUp, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
@@ -458,6 +458,8 @@ type Props = {
   pipelines:        GhlPipeline[];
   formQuestionDefs: Array<{ id: string; name: string }>;
   currentUser:      { id: string; role: string };
+  oppsByPipeline:   Record<string, OppEnriched[]>;
+  nextPageByPipeline: Record<string, number | null>;
 };
 
 type SharedData = {
@@ -466,7 +468,7 @@ type SharedData = {
   tutors:    Array<{ id: string; full_name: string }>;
 };
 
-export function PipelineKanban({ pipelines, formQuestionDefs, currentUser }: Props) {
+export function PipelineKanban({ pipelines, formQuestionDefs, currentUser, oppsByPipeline: initialOpps, nextPageByPipeline: initialCursors }: Props) {
   const router = useRouter();
   const [activePipelineId, setActivePipelineId] = useState(pipelines[0]?.id ?? "");
   const [view, setView]           = useState<"kanban" | "list">("kanban");
@@ -484,47 +486,60 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser }: Pro
   const [, startBulkTransition]         = useTransition();
   const [sortDir,      setSortDir]      = useState<"asc" | "desc">("desc");
 
-  // Leads cargados client-side desde caché Supabase vía API route
-  const [oppsByPipeline, setOppsByPipeline] = useState<Record<string, OppEnriched[]>>({});
-  const [oppsLoading,    setOppsLoading]    = useState(false);
-  const [oppsError,      setOppsError]      = useState<string | null>(null);
-  const [oppsVersion,    setOppsVersion]    = useState(0);
+  // Leads extras cargados client-side (se suman a los del servidor)
+  const [extraOpps,   setExtraOpps]   = useState<Record<string, OppEnriched[]>>({});
+  const [cursors,     setCursors]     = useState(initialCursors);
+  const [autoLoading, setAutoLoading] = useState(false);
+
+  // Cuando el servidor refresca los props (router.refresh), resetear extras
+  const prevInitialRef = useRef(initialOpps);
+  useEffect(() => {
+    if (prevInitialRef.current !== initialOpps) {
+      prevInitialRef.current = initialOpps;
+      setExtraOpps({});
+      setCursors(initialCursors);
+    }
+  }, [initialOpps, initialCursors]);
+
+  // Auto-carga el resto de páginas después del render inicial
+  useEffect(() => {
+    const firstPage = initialCursors[activePipelineId];
+    if (!firstPage) return;
+
+    let cancelled = false;
+    setAutoLoading(true);
+
+    const loadAll = async (page: number, seen: Set<string>) => {
+      if (cancelled) return;
+      try {
+        const res  = await fetch(`/api/ghl/pipeline/more?pipelineId=${activePipelineId}&page=${page}`);
+        if (!res.ok || cancelled) return;
+        const data = await res.json() as { opps: OppEnriched[]; nextPage: number | null };
+        if (cancelled) return;
+        const fresh = data.opps.filter(o => !seen.has(o.id));
+        fresh.forEach(o => seen.add(o.id));
+        if (fresh.length > 0) {
+          setExtraOpps(prev => ({
+            ...prev,
+            [activePipelineId]: [...(prev[activePipelineId] ?? []), ...fresh],
+          }));
+        }
+        if (data.nextPage) await loadAll(data.nextPage, seen);
+      } catch {
+        // silencioso — el usuario ya tiene los primeros 100
+      }
+    };
+
+    const seen = new Set((initialOpps[activePipelineId] ?? []).map(o => o.id));
+    loadAll(firstPage, seen).finally(() => { if (!cancelled) setAutoLoading(false); });
+
+    return () => { cancelled = true; };
+  // Solo se lanza al montar o cambiar de pipeline
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activePipelineId]);
 
   const [shared, setShared] = useState<SharedData>({ courses: [], platforms: [], tutors: [] });
   const [formations, setFormations] = useState<Array<{ id: string; name: string; courses: Array<{ course_id: string; position: number; course: { id: string; name: string } }> }>>([]);
-
-  // Carga leads del pipeline activo desde la caché vía API
-  useEffect(() => {
-    if (!activePipelineId) return;
-    let cancelled = false;
-    setOppsLoading(true);
-    setOppsError(null);
-
-    const load = () => {
-      fetch(`/api/ghl/pipeline?pipelineId=${activePipelineId}`)
-        .then(r => r.ok ? r.json() : r.json().then((e: { error: string }) => Promise.reject(e.error)))
-        .then((data: { opps: OppEnriched[]; syncing: boolean }) => {
-          if (cancelled) return;
-          if (data.syncing) {
-            // Caché vacía, sync en progreso — reintentar en 5s
-            setTimeout(() => { if (!cancelled) load(); }, 5000);
-          } else {
-            setOppsByPipeline(prev => ({ ...prev, [activePipelineId]: data.opps }));
-            setOppsLoading(false);
-          }
-        })
-        .catch((e: unknown) => {
-          if (cancelled) return;
-          setOppsError(String(e));
-          setOppsLoading(false);
-        });
-    };
-
-    load();
-    return () => { cancelled = true; };
-  }, [activePipelineId, oppsVersion]);
-
-  function refreshOpps() { setOppsVersion(v => v + 1); }
 
   useEffect(() => {
     Promise.all([
@@ -626,7 +641,10 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser }: Pro
   }
 
   const pipeline  = pipelines.find(p => p.id === activePipelineId);
-  const allOpps   = oppsByPipeline[activePipelineId] ?? [];
+  const allOpps   = [
+    ...(initialOpps[activePipelineId] ?? []),
+    ...(extraOpps[activePipelineId]   ?? []),
+  ];
   // Exclude won (matriculados) — lost/abandoned still show in their columns
   const visibleOpps = allOpps.filter(o => o.status !== "won");
 
@@ -834,28 +852,8 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser }: Pro
         </div>
       </div>
 
-      {/* ── Carga / error de leads ── */}
-      {oppsLoading && (
-        <div className="flex flex-col items-center gap-3 py-16 text-slate-400 text-sm">
-          <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
-          </svg>
-          <span>Sincronizando leads con GHL…</span>
-          <span className="text-xs text-slate-300">La primera carga tarda ~20s, después es instantáneo</span>
-        </div>
-      )}
-      {!oppsLoading && oppsError && (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-4 flex items-center justify-between">
-          <p className="text-sm text-red-700">{oppsError}</p>
-          <button onClick={refreshOpps} className="cursor-pointer text-xs font-semibold text-red-600 hover:text-red-800 ml-4">
-            Reintentar
-          </button>
-        </div>
-      )}
-
       {/* ── Kanban / List ── */}
-      {!oppsLoading && !oppsError && view === "kanban" ? (
+      {view === "kanban" ? (
         <div className="overflow-x-auto pb-4 flex-1">
           <div className="flex gap-0 items-start" style={{ minWidth: "max-content", height: "calc(100vh - 220px)" }}>
             {stagesByPhase.map(({ phase, stages }, pi) =>
@@ -906,7 +904,7 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser }: Pro
             ))}
           </div>
         </div>
-      ) : !oppsLoading && !oppsError ? (
+      ) : (
         <ListView
           opps={[...filteredOpps].sort((a, b) => {
             const ta = new Date(a.createdAt).getTime();
@@ -920,7 +918,18 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser }: Pro
           sortDir={sortDir}
           onToggleSort={() => setSortDir(d => d === "desc" ? "asc" : "desc")}
         />
-      ) : null}
+      )}
+
+      {/* ── Auto-carga en curso ── */}
+      {autoLoading && (
+        <div className="flex items-center justify-center gap-2 py-2 text-xs text-slate-400">
+          <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+          </svg>
+          Cargando más leads… ({allOpps.length} cargados)
+        </div>
+      )}
 
       {sheetOpp && (
         <LeadSheet
@@ -933,7 +942,7 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser }: Pro
           formations={formations}
           currentUser={currentUser}
           onClose={() => setSheetOpp(null)}
-          onAction={() => { setSheetOpp(null); refreshOpps(); }}
+          onAction={() => { setSheetOpp(null); router.refresh(); }}
           onStageChange={(oppId, newStageId, newStageName) => {
             setStageOverrides(p => ({ ...p, [oppId]: newStageId }));
             setSheetOpp(prev => prev?.id === oppId

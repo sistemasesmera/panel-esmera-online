@@ -3,6 +3,7 @@ import { after } from "next/server";
 import {
   fetchGhlPipelines,
   fetchGhlOpportunities,
+  fetchGhlOpportunitiesPage,
   fetchGhlCustomFieldDefs,
   type GhlPipeline,
   type GhlPipelineStage,
@@ -143,6 +144,29 @@ export async function getEnrichedOppsFromCache(
 ): Promise<OppEnriched[]> {
   const opps = await getOpportunitiesFromCache(pipelineId);
   return enrichOpps(opps, pipeline, currentUser);
+}
+
+// Primera página (100 leads) — rápido para el servidor. El resto se carga client-side.
+export async function fetchPipelineLeads(
+  pipelineId:  string,
+  pipeline:    GhlPipeline,
+  currentUser: PipelineUser,
+): Promise<{ opps: OppEnriched[]; nextPage: number | null }> {
+  const { opps: raw, nextPage } = await fetchGhlOpportunitiesPage(pipelineId, 1);
+  const opps = await enrichOpps(raw, pipeline, currentUser);
+  return { opps, nextPage };
+}
+
+// Página siguiente — usa el número de página devuelto por la anterior
+export async function fetchMorePipelineLeads(
+  pipelineId:  string,
+  pipeline:    GhlPipeline,
+  currentUser: PipelineUser,
+  page:        number,
+): Promise<{ opps: OppEnriched[]; nextPage: number | null }> {
+  const { opps: raw, nextPage } = await fetchGhlOpportunitiesPage(pipelineId, page);
+  const opps = await enrichOpps(raw, pipeline, currentUser);
+  return { opps, nextPage };
 }
 
 // Devuelve solo la estructura (pipelines + fieldDefs) — no toca GHL leads, es rápido

@@ -1,6 +1,11 @@
 import type { Metadata } from "next";
 import { requireCapability } from "@/lib/auth/require-role";
-import { fetchPipelineStructure } from "@/lib/data/ghl-pipeline.repository";
+import {
+  fetchPipelineStructure,
+  fetchPipelineLeads,
+} from "@/lib/data/ghl-pipeline.repository";
+import type { OppEnriched } from "@/lib/data/ghl-pipeline.repository";
+import type { AppRole } from "@/lib/domain/shared/permissions";
 import { PipelineKanban } from "@/components/features/crm/pipeline-kanban";
 
 export const metadata: Metadata = { title: "Pipeline" };
@@ -23,6 +28,24 @@ export default async function PipelinePage() {
     );
   }
 
+  const pipeline = structure.pipelines[0];
+  let oppsByPipeline:     Record<string, OppEnriched[]>    = {};
+  let nextPageByPipeline: Record<string, number | null>    = {};
+
+  if (pipeline) {
+    try {
+      const { opps, nextPage } = await fetchPipelineLeads(
+        pipeline.id,
+        pipeline,
+        { id: currentUser.id, role: currentUser.role as AppRole },
+      );
+      oppsByPipeline     = { [pipeline.id]: opps };
+      nextPageByPipeline = { [pipeline.id]: nextPage };
+    } catch {
+      // Muestra pipeline vacío si GHL falla
+    }
+  }
+
   return (
     <div>
       <h1 className="text-2xl font-black tracking-tight mb-6">Pipeline de ventas</h1>
@@ -30,6 +53,8 @@ export default async function PipelinePage() {
         pipelines={structure.pipelines}
         formQuestionDefs={structure.formQuestionDefs}
         currentUser={{ id: currentUser.id, role: currentUser.role }}
+        oppsByPipeline={oppsByPipeline}
+        nextPageByPipeline={nextPageByPipeline}
       />
     </div>
   );
