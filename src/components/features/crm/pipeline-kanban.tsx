@@ -514,7 +514,7 @@ function ListView({
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-type StageEntry = { opps: OppEnriched[]; total: number | null; nextPage: number | null; loading: boolean };
+type StageEntry = { opps: OppEnriched[]; total: number | null; nextPage: number | null; loading: boolean; initialLoad: boolean };
 
 type Props = {
   pipelines:        GhlPipeline[];
@@ -578,7 +578,7 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser }: Pro
 
     const init: Record<string, StageEntry> = {};
     for (const stage of pipeline.stages) {
-      init[stage.id] = { opps: [], total: null, nextPage: null, loading: true };
+      init[stage.id] = { opps: [], total: null, nextPage: null, loading: true, initialLoad: true };
     }
     setStageData(init);
 
@@ -591,14 +591,14 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser }: Pro
           if (cancelled) return;
           setStageData(prev => ({
             ...prev,
-            [stage.id]: { opps: data.opps, total: data.total, nextPage: data.nextPage, loading: false },
+            [stage.id]: { opps: data.opps, total: data.total, nextPage: data.nextPage, loading: false, initialLoad: false },
           }));
         })
         .catch(() => {
           if (cancelled) return;
           setStageData(prev => ({
             ...prev,
-            [stage.id]: { ...prev[stage.id], loading: false },
+            [stage.id]: { ...prev[stage.id], loading: false, initialLoad: false },
           }));
         });
     }
@@ -625,7 +625,7 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser }: Pro
           const fresh   = data.opps.filter(o => !seenIds.has(o.id));
           return {
             ...prev,
-            [stageId]: { opps: [...existing.opps, ...fresh], total: existing.total ?? data.total, nextPage: data.nextPage, loading: false },
+            [stageId]: { opps: [...existing.opps, ...fresh], total: existing.total ?? data.total, nextPage: data.nextPage, loading: false, initialLoad: false },
           };
         });
       })
@@ -784,7 +784,7 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser }: Pro
   const matchedIds      = new Set(stagesByPhase.flatMap(x => x.stages.map(s => s.id)));
   const unmatchedStages = (pipeline?.stages ?? []).filter(s => !matchedIds.has(s.id));
 
-  const allLoaded = Object.keys(stageData).length > 0 && Object.values(stageData).every(e => !e.loading);
+  const allLoaded = Object.keys(stageData).length > 0 && Object.values(stageData).every(e => !e.initialLoad);
 
   function toggleId(id: string) {
     setSelectedIds(prev => {
@@ -1000,66 +1000,70 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser }: Pro
         </div>
       )}
 
-      {/* ── Kanban / List ── */}
-      {!filterSearch.trim() && view === "kanban" && !allLoaded && pipeline && (
-        <KanbanSkeleton pipeline={pipeline} />
-      )}
-      {!filterSearch.trim() && view === "kanban" && allLoaded ? (
-        <div className="overflow-x-auto pb-4 flex-1">
-          <div className="flex gap-0 items-start" style={{ minWidth: "max-content" }}>
-            {stagesByPhase.map(({ phase, stages }, pi) =>
-              stages.length > 0 ? (
-                <div key={phase.id} className="flex items-start gap-2.5">
-                  {pi > 0 && (
-                    <div className="flex flex-col items-center self-stretch pt-1 px-1">
-                      <div className="w-px flex-1 bg-slate-200" />
-                    </div>
-                  )}
-                  <div className="flex flex-col gap-2 pr-1">
-                    <p className={cn("text-[9px] font-black uppercase tracking-widest px-1", phase.color)}>
-                      {phase.label}
-                    </p>
-                    <div className="flex gap-2.5">
-                      {stages.map(stage => (
-                        <KanbanColumn
-                          key={stage.id}
-                          stage={stage}
-                          opps={filteredOpps.filter(o => o.pipelineStageId === stage.id)}
-                          total={stageData[stage.id]?.total ?? null}
-                          loadingMore={stageData[stage.id]?.loading ?? false}
-                          onScrollBottom={() => loadMoreForStage(stage.id)}
-                          onOpen={setSheetOpp}
-                          onDragStart={handleDragStart}
-                          onDrop={handleDrop}
-                          onDragOver={handleDragOver}
-                          onDragLeave={handleDragLeave}
-                          isDragOver={dragOver === stage.id}
-                        />
-                      ))}
+      {/* ── Kanban ── */}
+      {!filterSearch.trim() && view === "kanban" && (
+        allLoaded ? (
+          <div className="overflow-x-auto pb-4 flex-1">
+            <div className="flex gap-0 items-start" style={{ minWidth: "max-content" }}>
+              {stagesByPhase.map(({ phase, stages }, pi) =>
+                stages.length > 0 ? (
+                  <div key={phase.id} className="flex items-start gap-2.5">
+                    {pi > 0 && (
+                      <div className="flex flex-col items-center self-stretch pt-1 px-1">
+                        <div className="w-px flex-1 bg-slate-200" />
+                      </div>
+                    )}
+                    <div className="flex flex-col gap-2 pr-1">
+                      <p className={cn("text-[9px] font-black uppercase tracking-widest px-1", phase.color)}>
+                        {phase.label}
+                      </p>
+                      <div className="flex gap-2.5">
+                        {stages.map(stage => (
+                          <KanbanColumn
+                            key={stage.id}
+                            stage={stage}
+                            opps={filteredOpps.filter(o => o.pipelineStageId === stage.id)}
+                            total={stageData[stage.id]?.total ?? null}
+                            loadingMore={stageData[stage.id]?.loading ?? false}
+                            onScrollBottom={() => loadMoreForStage(stage.id)}
+                            onOpen={setSheetOpp}
+                            onDragStart={handleDragStart}
+                            onDrop={handleDrop}
+                            onDragOver={handleDragOver}
+                            onDragLeave={handleDragLeave}
+                            isDragOver={dragOver === stage.id}
+                          />
+                        ))}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ) : null
-            )}
-            {unmatchedStages.map(stage => (
-              <KanbanColumn
-                key={stage.id}
-                stage={stage}
-                opps={filteredOpps.filter(o => o.pipelineStageId === stage.id)}
-                total={stageData[stage.id]?.total ?? null}
-                loadingMore={stageData[stage.id]?.loading ?? false}
-                onScrollBottom={() => loadMoreForStage(stage.id)}
-                onOpen={setSheetOpp}
-                onDragStart={handleDragStart}
-                onDrop={handleDrop}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                isDragOver={dragOver === stage.id}
-              />
-            ))}
+                ) : null
+              )}
+              {unmatchedStages.map(stage => (
+                <KanbanColumn
+                  key={stage.id}
+                  stage={stage}
+                  opps={filteredOpps.filter(o => o.pipelineStageId === stage.id)}
+                  total={stageData[stage.id]?.total ?? null}
+                  loadingMore={stageData[stage.id]?.loading ?? false}
+                  onScrollBottom={() => loadMoreForStage(stage.id)}
+                  onOpen={setSheetOpp}
+                  onDragStart={handleDragStart}
+                  onDrop={handleDrop}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  isDragOver={dragOver === stage.id}
+                />
+              ))}
+            </div>
           </div>
-        </div>
-      ) : !filterSearch.trim() ? (
+        ) : pipeline ? (
+          <KanbanSkeleton pipeline={pipeline} />
+        ) : null
+      )}
+
+      {/* ── Lista ── */}
+      {!filterSearch.trim() && view === "list" && (
         <ListView
           opps={[...filteredOpps].sort((a, b) => {
             const ta = new Date(a.createdAt).getTime();
@@ -1073,7 +1077,7 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser }: Pro
           sortDir={sortDir}
           onToggleSort={() => setSortDir(d => d === "desc" ? "asc" : "desc")}
         />
-      ) : null}
+      )}
 
       {sheetOpp && (
         <LeadSheet
