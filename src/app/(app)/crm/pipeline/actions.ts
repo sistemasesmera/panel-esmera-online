@@ -4,6 +4,7 @@ import { requireCapability } from "@/lib/auth/require-role";
 import { requireAuth } from "@/lib/auth/require-role";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { updateGhlOpportunity, updateGhlContact, createGhlContact, createGhlOpportunity } from "@/lib/ghl/api";
+import { updateCachedOppStage } from "@/lib/data/ghl-cache.repository";
 import { normalizePhone } from "@/lib/utils/phone";
 import type { NoteType } from "@/lib/data/lead-notes.repository";
 import { LOST_REASONS, type LostReason, UNQUALIFIED_REASONS, type UnqualifiedReason } from "@/lib/domain/crm/lead-status";
@@ -23,6 +24,9 @@ export async function moveOppToStage(
   } catch (err: any) {
     return { error: `Error al mover etapa: ${err.message}` };
   }
+
+  // Actualizar caché local para que el kanban refleje el cambio sin esperar el próximo sync
+  await updateCachedOppStage(oppId, stageId).catch(() => {});
 
   if (contactId && toStageName) {
     const db = createAdminClient() as any;

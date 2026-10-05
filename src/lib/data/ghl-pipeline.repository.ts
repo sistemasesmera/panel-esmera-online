@@ -1,4 +1,5 @@
 import "server-only";
+import { after } from "next/server";
 import {
   fetchGhlPipelines,
   fetchGhlOpportunities,
@@ -11,6 +12,13 @@ import {
 import { SETTER_STAGES, CLOSER_STAGES } from "@/lib/domain/shared/permissions";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { AppRole } from "@/lib/domain/shared/permissions";
+import {
+  getCacheState,
+  getOpportunitiesFromCache,
+  upsertOpportunitiesCache,
+  acquireSyncLock,
+  releaseSyncLock,
+} from "@/lib/data/ghl-cache.repository";
 
 export type { GhlPipeline, GhlPipelineStage, GhlOpportunity, GhlCustomFieldDef };
 
@@ -109,6 +117,16 @@ async function enrichOpps(
   );
 }
 
+async function syncPipelineToCache(pipelineId: string): Promise<void> {
+  await acquireSyncLock(pipelineId);
+  try {
+    const opps = await fetchGhlOpportunities(pipelineId);
+    await upsertOpportunitiesCache(pipelineId, opps);
+  } finally {
+    await releaseSyncLock(pipelineId).catch(() => {});
+  }
+}
+
 export async function fetchPipelineData(currentUser: PipelineUser): Promise<PipelineData> {
   const defaultPipelineId = process.env.GHL_PIPELINE_ID;
   const cursoFieldId      = process.env.GHL_CURSO_FIELD_ID       ?? null;
@@ -129,7 +147,20 @@ export async function fetchPipelineData(currentUser: PipelineUser): Promise<Pipe
 
   const entries = await Promise.all(
     pipelines.map(async (p) => {
-      const opps     = await fetchGhlOpportunities(p.id);
+      const state = await getCacheState(p.id);
+
+      if (state.isEmpty) {
+        // Primera carga — sincronizar GHL ahora de forma síncrona
+        await syncPipelineToCache(p.id);
+      } else if (state.isStale && !state.isLocked) {
+        // Caché obsoleta — servir datos actuales y refrescar en segundo plano
+        after(async () => {
+          try { await syncPipelineToCache(p.id); }
+          catch (e) { console.error("[pipeline] bg sync failed:", e); }
+        });
+      }
+
+      const opps     = await getOpportunitiesFromCache(p.id);
       const enriched = await enrichOpps(opps, p, currentUser);
       return [p.id, enriched] as const;
     })
