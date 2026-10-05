@@ -79,27 +79,16 @@ export async function fetchGhlOpportunities(pipelineId: string): Promise<GhlOppo
   if (!locationId) throw new Error("GHL_LOCATION_ID not set");
   if (!process.env.GHL_API_KEY) throw new Error("GHL_API_KEY not set");
 
-  const all: GhlOpportunity[] = [];
-  let startAfterId: string | undefined;
+  const url = new URL(`${GHL_API_BASE}/opportunities/search`);
+  url.searchParams.set("location_id", locationId);
+  url.searchParams.set("pipeline_id", pipelineId);
+  url.searchParams.set("limit", "100");
 
-  do {
-    const url = new URL(`${GHL_API_BASE}/opportunities/search`);
-    url.searchParams.set("location_id", locationId);
-    url.searchParams.set("pipeline_id", pipelineId);
-    url.searchParams.set("limit", "100");
-    if (startAfterId) url.searchParams.set("startAfterId", startAfterId);
-
-    const res = await ghlFetch(url.toString(), { headers: ghlHeaders(), cache: "no-store" });
-    if (!res.ok) throw new Error(`GHL opportunities error ${res.status}: ${await res.text()}`);
-    const data = await res.json();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const page = (data.opportunities ?? []) as any[] as GhlOpportunity[];
-    all.push(...page);
-    startAfterId = data.meta?.startAfterId ?? undefined;
-    if (page.length < 100) break;
-  } while (startAfterId);
-
-  return all;
+  const res = await ghlFetch(url.toString(), { headers: ghlHeaders(), cache: "no-store" });
+  if (!res.ok) throw new Error(`GHL opportunities error ${res.status}: ${await res.text()}`);
+  const data = await res.json();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data.opportunities ?? []) as any[] as GhlOpportunity[];
 }
 
 export async function fetchGhlOpportunity(id: string): Promise<GhlOpportunity | null> {
