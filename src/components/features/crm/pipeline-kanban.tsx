@@ -496,15 +496,32 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser }: Pro
   // Carga leads del pipeline activo desde la caché vía API
   useEffect(() => {
     if (!activePipelineId) return;
+    let cancelled = false;
     setOppsLoading(true);
     setOppsError(null);
-    fetch(`/api/ghl/pipeline?pipelineId=${activePipelineId}`)
-      .then(r => r.ok ? r.json() : r.json().then((e: { error: string }) => Promise.reject(e.error)))
-      .then((opps: OppEnriched[]) => {
-        setOppsByPipeline(prev => ({ ...prev, [activePipelineId]: opps }));
-      })
-      .catch((e: unknown) => setOppsError(String(e)))
-      .finally(() => setOppsLoading(false));
+
+    const load = () => {
+      fetch(`/api/ghl/pipeline?pipelineId=${activePipelineId}`)
+        .then(r => r.ok ? r.json() : r.json().then((e: { error: string }) => Promise.reject(e.error)))
+        .then((data: { opps: OppEnriched[]; syncing: boolean }) => {
+          if (cancelled) return;
+          if (data.syncing) {
+            // Caché vacía, sync en progreso — reintentar en 5s
+            setTimeout(() => { if (!cancelled) load(); }, 5000);
+          } else {
+            setOppsByPipeline(prev => ({ ...prev, [activePipelineId]: data.opps }));
+            setOppsLoading(false);
+          }
+        })
+        .catch((e: unknown) => {
+          if (cancelled) return;
+          setOppsError(String(e));
+          setOppsLoading(false);
+        });
+    };
+
+    load();
+    return () => { cancelled = true; };
   }, [activePipelineId, oppsVersion]);
 
   function refreshOpps() { setOppsVersion(v => v + 1); }
@@ -819,12 +836,13 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser }: Pro
 
       {/* ── Carga / error de leads ── */}
       {oppsLoading && (
-        <div className="flex items-center gap-2 py-8 justify-center text-slate-400 text-sm">
-          <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+        <div className="flex flex-col items-center gap-3 py-16 text-slate-400 text-sm">
+          <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
           </svg>
-          Cargando leads…
+          <span>Sincronizando leads con GHL…</span>
+          <span className="text-xs text-slate-300">La primera carga tarda ~20s, después es instantáneo</span>
         </div>
       )}
       {!oppsLoading && oppsError && (
