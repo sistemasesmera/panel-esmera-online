@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useTransition } from "react";
+import { useState, useEffect, useTransition, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { LayoutGrid, List, ArrowRight, GraduationCap, Mail, Clock, CalendarPlus, Flame, Thermometer, Snowflake, Plus, UserCheck, ChevronUp, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
@@ -383,6 +383,7 @@ function KanbanSkeleton({ pipeline }: { pipeline: GhlPipeline }) {
 // ── ListView ──────────────────────────────────────────────────────────────────
 function ListView({
   opps, onOpen, selectedIds, onToggleId, onToggleAll, sortDir, onToggleSort,
+  loadingMore, onLoadMore,
 }: {
   opps:          OppEnriched[];
   onOpen:        (opp: OppEnriched) => void;
@@ -391,7 +392,21 @@ function ListView({
   onToggleAll:   () => void;
   sortDir:       "asc" | "desc";
   onToggleSort:  () => void;
+  loadingMore?:  boolean;
+  onLoadMore?:   () => void;
 }) {
+  const sentinelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el || !onLoadMore) return;
+    const obs = new IntersectionObserver(
+      entries => { if (entries[0]?.isIntersecting) onLoadMore(); },
+      { rootMargin: "120px" },
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [onLoadMore]);
   const STATUS_CLS: Record<string, string> = {
     open:      "bg-emerald-50 text-emerald-600 ring-1 ring-emerald-200/60",
     won:       "bg-green-50 text-green-600 ring-1 ring-green-200/60",
@@ -405,9 +420,13 @@ function ListView({
   const allChecked = opps.length > 0 && selectedIds.size === opps.length;
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden card-shadow">
+    <div
+      className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden card-shadow flex flex-col"
+      style={{ height: "calc(100vh - 280px)", minHeight: "300px" }}
+    >
+      <div className="overflow-y-auto flex-1 min-h-0">
       <table className="w-full text-sm">
-        <thead>
+        <thead className="sticky top-0 z-10">
           <tr className="border-b border-slate-100 bg-slate-50/80">
             <th className="px-4 py-3.5 w-10">
               <input
@@ -509,6 +528,14 @@ function ListView({
           })}
         </tbody>
       </table>
+      {loadingMore && (
+        <div className="flex items-center justify-center gap-2 py-4 text-sm text-slate-400">
+          <Spinner className="h-4 w-4" />
+          Cargando más…
+        </div>
+      )}
+      <div ref={sentinelRef} className="h-px" />
+      </div>
     </div>
   );
 }
@@ -571,6 +598,14 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser }: Pro
   // Per-stage data: stageId → { opps, nextPage, loading }
   const [stageData, setStageData] = useState<Record<string, StageEntry>>({});
 
+  // Flat list data — independent of stageData, used only in list view
+  const [listData, setListData] = useState<{
+    opps:     OppEnriched[];
+    nextPage: number | null;
+    loading:  boolean;
+    loaded:   boolean;
+  }>({ opps: [], nextPage: null, loading: false, loaded: false });
+
   // ── Load all stages in parallel on mount / pipeline change / version bump ──
   useEffect(() => {
     const pipeline = pipelines.find(p => p.id === activePipelineId);
@@ -607,6 +642,24 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser }: Pro
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activePipelineId, version]);
 
+  // Reset list state whenever pipeline or version changes
+  useEffect(() => {
+    setListData({ opps: [], nextPage: null, loading: false, loaded: false });
+  }, [activePipelineId, version]);
+
+  // Load first page of list when entering list view
+  useEffect(() => {
+    if (view !== "list" || listData.loaded || listData.loading) return;
+    setListData(prev => ({ ...prev, loading: true }));
+    fetch(`/api/ghl/pipeline/more?pipelineId=${activePipelineId}&page=1`)
+      .then(r => r.ok ? r.json() : Promise.reject(r))
+      .then((data: { opps: OppEnriched[]; nextPage: number | null }) => {
+        setListData({ opps: data.opps, nextPage: data.nextPage, loading: false, loaded: true });
+      })
+      .catch(() => setListData(prev => ({ ...prev, loading: false, loaded: true })));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, listData.loaded, listData.loading, activePipelineId]);
+
   // ── Scroll-triggered load more for a single stage ─────────────────────────
   function loadMoreForStage(stageId: string) {
     const entry = stageData[stageId];
@@ -632,6 +685,23 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser }: Pro
       .catch(() => {
         setStageData(prev => ({ ...prev, [stageId]: { ...prev[stageId], loading: false } }));
       });
+  }
+
+  // ── Load more for list view ───────────────────────────────────────────────
+  function loadMoreList() {
+    if (listData.loading || listData.nextPage === null) return;
+    const page = listData.nextPage;
+    setListData(prev => ({ ...prev, loading: true }));
+    fetch(`/api/ghl/pipeline/more?pipelineId=${activePipelineId}&page=${page}`)
+      .then(r => r.ok ? r.json() : Promise.reject(r))
+      .then((data: { opps: OppEnriched[]; nextPage: number | null }) => {
+        setListData(prev => {
+          const seenIds = new Set(prev.opps.map(o => o.id));
+          const fresh   = data.opps.filter(o => !seenIds.has(o.id));
+          return { ...prev, opps: [...prev.opps, ...fresh], nextPage: data.nextPage, loading: false };
+        });
+      })
+      .catch(() => setListData(prev => ({ ...prev, loading: false })));
   }
 
   // ── Shared data (courses, platforms, tutors, setters) ─────────────────────
@@ -786,8 +856,24 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser }: Pro
 
   const allLoaded  = Object.keys(stageData).length > 0 && Object.values(stageData).every(e => !e.initialLoad);
   const isSearching = filterSearch.trim().length > 0;
-  // Fuente de datos activa: resultados de búsqueda GHL o leads cargados por etapa
-  const activeOpps  = isSearching && searchResults ? searchResults : filteredOpps;
+  // Fuente de datos activa para kanban: resultados de búsqueda GHL o leads cargados por etapa
+  const activeOpps = isSearching && searchResults ? searchResults : filteredOpps;
+
+  // Fuente de datos activa para lista: listData con filtros cliente aplicados
+  const listFilteredOpps = listData.opps.filter(o => {
+    if (o.status === "won") return false;
+    if (filterStageId && o.pipelineStageId !== filterStageId) return false;
+    if (filterCurso   && o.cursoValue !== filterCurso)        return false;
+    if (filterMember  && o.setter_name !== filterMember && o.closer_name !== filterMember) return false;
+    if (filterSearch) {
+      const q = filterSearch.toLowerCase();
+      const nameMatch  = o.contact.name?.toLowerCase().includes(q);
+      const phoneMatch = o.contact.phone?.replace(/\s/g, "").includes(q.replace(/\s/g, ""));
+      if (!nameMatch && !phoneMatch) return false;
+    }
+    return true;
+  });
+  const activeListOpps = isSearching && searchResults ? searchResults : listFilteredOpps;
 
   function toggleId(id: string) {
     setSelectedIds(prev => {
@@ -798,10 +884,11 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser }: Pro
   }
 
   function toggleAll() {
+    const source = view === "list" ? activeListOpps : filteredOpps;
     setSelectedIds(prev =>
-      prev.size === filteredOpps.length
+      prev.size === source.length
         ? new Set()
-        : new Set(filteredOpps.map(o => o.id))
+        : new Set(source.map(o => o.id))
     );
   }
 
@@ -906,7 +993,7 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser }: Pro
                     onClick={() => {
                       setBulkOpen(false);
                       startBulkTransition(async () => {
-                        const leads = filteredOpps
+                        const leads = activeListOpps
                           .filter(o => selectedIds.has(o.id))
                           .map(o => ({ contactId: o.contact.id, oppId: o.id }));
                         const res = await bulkAssignSetter(leads, s.id, s.full_name);
@@ -1060,19 +1147,28 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser }: Pro
 
       {/* ── Lista ── */}
       {view === "list" && !searchLoading && (
-        <ListView
-          opps={[...activeOpps].sort((a, b) => {
-            const ta = new Date(a.createdAt).getTime();
-            const tb = new Date(b.createdAt).getTime();
-            return sortDir === "desc" ? tb - ta : ta - tb;
-          })}
-          onOpen={setSheetOpp}
-          selectedIds={selectedIds}
-          onToggleId={toggleId}
-          onToggleAll={toggleAll}
-          sortDir={sortDir}
-          onToggleSort={() => setSortDir(d => d === "desc" ? "asc" : "desc")}
-        />
+        !isSearching && !listData.loaded && listData.loading ? (
+          <div className="flex items-center justify-center gap-2 py-16 text-sm text-slate-400">
+            <Spinner className="h-5 w-5" />
+            Cargando leads…
+          </div>
+        ) : (
+          <ListView
+            opps={[...activeListOpps].sort((a, b) => {
+              const ta = new Date(a.createdAt).getTime();
+              const tb = new Date(b.createdAt).getTime();
+              return sortDir === "desc" ? tb - ta : ta - tb;
+            })}
+            onOpen={setSheetOpp}
+            selectedIds={selectedIds}
+            onToggleId={toggleId}
+            onToggleAll={toggleAll}
+            sortDir={sortDir}
+            onToggleSort={() => setSortDir(d => d === "desc" ? "asc" : "desc")}
+            loadingMore={listData.loading}
+            onLoadMore={loadMoreList}
+          />
+        )
       )}
 
       {sheetOpp && (

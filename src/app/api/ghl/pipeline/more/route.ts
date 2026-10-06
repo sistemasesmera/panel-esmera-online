@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
   if (!pageParam)  return NextResponse.json({ error: "page requerido" },       { status: 400 });
 
   const page = parseInt(pageParam, 10);
-  if (isNaN(page) || page < 2) return NextResponse.json({ error: "page inválido" }, { status: 400 });
+  if (isNaN(page) || page < 1) return NextResponse.json({ error: "page inválido" }, { status: 400 });
 
   try {
     const allPipelines = await fetchGhlPipelines();
