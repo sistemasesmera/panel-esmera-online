@@ -2,7 +2,7 @@ import "server-only";
 import path from "path";
 import fs from "fs";
 import QRCode from "qrcode";
-import { Document, Page, Image, Text, StyleSheet } from "@react-pdf/renderer";
+import { Document, Page, Image, Text, View, StyleSheet } from "@react-pdf/renderer";
 
 const QR_BASE = "https://esmeraonline.com/verificar-certificado";
 const TEMPLATE_PATH = path.join(process.cwd(), "public", "certificate-template.png");
@@ -44,13 +44,15 @@ export async function buildCertificatePdf(cert: {
   return (
     <Document>
       <Page size="A4" orientation="landscape" style={s.page}>
-        <Image src={templateDataUrl} style={s.bg} />
-        <Text style={s.name}>{cert.student_name.toUpperCase()}</Text>
-        <Text style={s.course}>{cert.course_name.toUpperCase()}</Text>
-        <Text style={s.certNumber}>{cert.certificate_number}</Text>
-        <Image src={qrDataUrl} style={s.qr} />
-        <Text style={s.startDate}>{fmtDate(cert.start_date)}</Text>
-        <Text style={s.endDate}>{fmtDate(cert.end_date)}</Text>
+        <View style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%" }}>
+          <Image src={templateDataUrl} style={s.bg} />
+          <Text style={s.name}>{cert.student_name.toUpperCase()}</Text>
+          <Text style={s.course}>{cert.course_name.toUpperCase()}</Text>
+          <Text style={s.certNumber}>{cert.certificate_number}</Text>
+          <Image src={qrDataUrl} style={s.qr} />
+          <Text style={s.startDate}>{fmtDate(cert.start_date)}</Text>
+          <Text style={s.endDate}>{fmtDate(cert.end_date)}</Text>
+        </View>
       </Page>
     </Document>
   );
