@@ -1,10 +1,11 @@
 "use client";
 import { useState, useEffect, useTransition, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { LayoutGrid, List, ArrowRight, GraduationCap, Mail, Clock, CalendarPlus, Flame, Thermometer, Snowflake, Plus, UserCheck, ChevronUp, ChevronDown } from "lucide-react";
+import { LayoutGrid, List, ArrowRight, GraduationCap, Mail, Clock, CalendarPlus, Flame, Thermometer, Snowflake, Plus, Upload, UserCheck, ChevronUp, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { LeadSheet } from "./lead-sheet";
 import { NewLeadModal } from "./new-lead-modal";
+import { ImportLeadsModal } from "./import-leads-modal";
 import { cn, fmt } from "@/lib/utils";
 import { moveOppToStage, bulkAssignSetter } from "@/app/(app)/crm/pipeline/actions";
 import type { GhlPipeline, GhlPipelineStage, OppEnriched } from "@/lib/data/ghl-pipeline.repository";
@@ -482,7 +483,12 @@ function ListView({
                       {initials(opp.contact.name)}
                     </div>
                     <div>
-                      <p className="font-semibold text-slate-900 text-xs">{opp.contact.name}</p>
+                      <button
+                        onClick={() => onOpen(opp)}
+                        className="cursor-pointer font-semibold text-slate-900 text-xs hover:text-indigo-600 transition-colors text-left"
+                      >
+                        {opp.contact.name}
+                      </button>
                       <p className="text-[10px] text-slate-400">{opp.contact.phone ?? opp.contact.email ?? "—"}</p>
                     </div>
                   </div>
@@ -562,6 +568,7 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser }: Pro
   const [view, setView]                         = useState<"kanban" | "list">("kanban");
   const [sheetOpp, setSheetOpp]                 = useState<OppEnriched | null>(null);
   const [newLeadOpen, setNewLeadOpen]           = useState(false);
+  const [importOpen,  setImportOpen]            = useState(false);
   const [version, setVersion]                   = useState(0);
 
   const [filterSearch,  setFilterSearch]  = useState("");
@@ -907,6 +914,14 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser }: Pro
           Nuevo lead
         </button>
 
+        <button
+          onClick={() => setImportOpen(true)}
+          className="cursor-pointer flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors shadow-sm"
+        >
+          <Upload className="h-3.5 w-3.5" />
+          Importar CSV
+        </button>
+
         <div className="relative">
           <input
             type="text"
@@ -1215,6 +1230,19 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser }: Pro
             pipelineId={pipeline.id}
             firstStageId={firstStage.id}
             onClose={() => setNewLeadOpen(false)}
+          />
+        );
+      })()}
+
+      {importOpen && pipeline && (() => {
+        const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+        const cualificandoStage = pipeline.stages.find(s => norm(s.name).includes("cualificando"))
+          ?? pipeline.stages[0];
+        return (
+          <ImportLeadsModal
+            pipelineId={pipeline.id}
+            stageId={cualificandoStage.id}
+            onClose={() => setImportOpen(false)}
           />
         );
       })()}

@@ -7,6 +7,7 @@ import { useState } from "react";
 import {
   LayoutDashboard, Kanban, GraduationCap, BookOpen,
   BookMarked, ScrollText, Settings, LogOut, CalendarCheck, CalendarDays, Zap,
+  ChevronLeft, ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { AppRole } from "@/lib/domain/shared/permissions";
@@ -75,35 +76,57 @@ export function AppSidebar({
 }) {
   const pathname = usePathname();
   const [automationsOpen, setAutomationsOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
 
   return (
     <>
     <aside
-      className="flex h-full w-60 flex-col shrink-0 select-none"
+      className={cn(
+        "flex h-full flex-col shrink-0 select-none transition-all duration-200",
+        collapsed ? "w-14" : "w-60"
+      )}
       style={{ background: "var(--sb-bg)", borderRight: "1px solid var(--sb-border)" }}
     >
 
-      {/* ── Logo ── */}
-      <div className="flex items-center justify-center px-8 h-[72px] shrink-0" style={{ borderBottom: "1px solid var(--sb-border)" }}>
-        <Image
-          src="/esmera-logo.png"
-          alt="Esmera Online"
-          width={160}
-          height={48}
-          className="h-10 w-auto object-contain"
-          priority
-        />
+      {/* ── Logo + Toggle ── */}
+      <div
+        className={cn("flex items-center h-[72px] shrink-0", collapsed ? "justify-center px-2" : "justify-between px-5")}
+        style={{ borderBottom: "1px solid var(--sb-border)" }}
+      >
+        {!collapsed && (
+          <Image
+            src="/esmera-logo.png"
+            alt="Esmera Online"
+            width={130}
+            height={40}
+            className="h-9 w-auto object-contain"
+            priority
+          />
+        )}
+        <button
+          onClick={() => setCollapsed(c => !c)}
+          title={collapsed ? "Expandir menú" : "Colapsar menú"}
+          className="p-1.5 rounded-lg transition-colors"
+          style={{ color: "var(--sb-muted)" }}
+          onMouseEnter={e => (e.currentTarget.style.color = "var(--sb-fg)")}
+          onMouseLeave={e => (e.currentTarget.style.color = "var(--sb-muted)")}
+        >
+          {collapsed
+            ? <ChevronRight className="h-4 w-4" />
+            : <ChevronLeft className="h-4 w-4" />
+          }
+        </button>
       </div>
 
       {/* ── Navigation ── */}
-      <nav className="flex-1 overflow-y-auto px-3 py-4 sb-scroll" style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+      <nav className="flex-1 overflow-y-auto px-2 py-4 sb-scroll" style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
         {GROUPS.map((group, gi) => {
           const visible = group.items.filter(item => !item.roles || item.roles.includes(role));
           if (!visible.length) return null;
 
           return (
             <div key={gi}>
-              {group.label && (
+              {group.label && !collapsed && (
                 <p
                   className="text-[9px] font-black uppercase tracking-[0.12em] mb-1 px-3"
                   style={{ color: "var(--sb-muted)", letterSpacing: "0.14em" }}
@@ -111,6 +134,7 @@ export function AppSidebar({
                   {group.label}
                 </p>
               )}
+              {group.label && collapsed && <div className="h-px mb-1 mx-1" style={{ background: "var(--sb-border)" }} />}
               <div className="space-y-0.5">
                 {visible.map(item => {
                   const active = pathname === item.href || pathname.startsWith(item.href + "/");
@@ -119,10 +143,11 @@ export function AppSidebar({
                     <Link
                       key={item.href}
                       href={item.href}
-                      className={cn("sb-link", active && "sb-active")}
+                      title={collapsed ? item.label : undefined}
+                      className={cn("sb-link", active && "sb-active", collapsed && "justify-center !px-0")}
                     >
                       <Icon className="h-[15px] w-[15px] shrink-0" />
-                      <span className="truncate">{item.label}</span>
+                      {!collapsed && <span className="truncate">{item.label}</span>}
                     </Link>
                   );
                 })}
@@ -134,51 +159,66 @@ export function AppSidebar({
 
       {/* ── Automations trigger (admin only) ── */}
       {role === "administracion" && (
-        <div className="px-3 pb-1 shrink-0">
+        <div className={cn("pb-1 shrink-0", collapsed ? "px-1.5" : "px-3")}>
           <button
             onClick={() => setAutomationsOpen(true)}
             title="Automatizaciones"
-            className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-[11px] font-medium transition-colors"
+            className={cn(
+              "w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-[11px] font-medium transition-colors",
+              collapsed && "justify-center !px-0"
+            )}
             style={{ color: "var(--sb-muted)" }}
             onMouseEnter={e => (e.currentTarget.style.color = "var(--sb-fg)")}
             onMouseLeave={e => (e.currentTarget.style.color = "var(--sb-muted)")}
           >
             <Zap className="h-3 w-3 shrink-0" />
-            <span>Automatizaciones</span>
+            {!collapsed && <span>Automatizaciones</span>}
           </button>
         </div>
       )}
 
       {/* ── User ── */}
-      <div className="px-3 py-3 shrink-0" style={{ borderTop: "1px solid var(--sb-border)" }}>
-        {/* User card */}
-        <div
-          className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl mb-1"
-          style={{ background: "var(--sb-bg2)" }}
-        >
-          {/* Avatar */}
+      <div className={cn("py-3 shrink-0", collapsed ? "px-1.5" : "px-3")} style={{ borderTop: "1px solid var(--sb-border)" }}>
+        {collapsed ? (
+          <div className="flex justify-center py-1" title={userName}>
+            <div
+              className="h-7 w-7 rounded-lg flex items-center justify-center text-[11px] font-black text-white shrink-0"
+              style={{ background: "linear-gradient(135deg, #1ab5c0 0%, #0a8a94 100%)" }}
+            >
+              {getInitials(userName)}
+            </div>
+          </div>
+        ) : (
           <div
-            className="h-7 w-7 rounded-lg flex items-center justify-center text-[11px] font-black text-white shrink-0"
-            style={{ background: "linear-gradient(135deg, #1ab5c0 0%, #0a8a94 100%)" }}
+            className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl mb-1"
+            style={{ background: "var(--sb-bg2)" }}
           >
-            {getInitials(userName)}
+            <div
+              className="h-7 w-7 rounded-lg flex items-center justify-center text-[11px] font-black text-white shrink-0"
+              style={{ background: "linear-gradient(135deg, #1ab5c0 0%, #0a8a94 100%)" }}
+            >
+              {getInitials(userName)}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[12px] font-semibold truncate leading-none mb-0.5" style={{ color: "var(--sb-fg)" }}>
+                {userName}
+              </p>
+              <span className={cn("text-[9px] font-bold px-1.5 py-0.5 rounded-md inline-block leading-none", ROLE_COLORS[role])}>
+                {ROLE_LABELS[role]}
+              </span>
+            </div>
           </div>
-
-          <div className="min-w-0 flex-1">
-            <p className="text-[12px] font-semibold truncate leading-none mb-0.5" style={{ color: "var(--sb-fg)" }}>
-              {userName}
-            </p>
-            <span className={cn("text-[9px] font-bold px-1.5 py-0.5 rounded-md inline-block leading-none", ROLE_COLORS[role])}>
-              {ROLE_LABELS[role]}
-            </span>
-          </div>
-        </div>
+        )}
 
         {/* Sign out */}
         <form action={signOut}>
-          <button type="submit" className="sb-signout">
+          <button
+            type="submit"
+            title={collapsed ? "Cerrar sesión" : undefined}
+            className={cn("sb-signout", collapsed && "justify-center !px-0")}
+          >
             <LogOut className="h-3.5 w-3.5 shrink-0" />
-            Cerrar sesión
+            {!collapsed && "Cerrar sesión"}
           </button>
         </form>
       </div>

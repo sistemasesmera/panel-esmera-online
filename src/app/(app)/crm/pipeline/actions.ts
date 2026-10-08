@@ -3,7 +3,7 @@
 import { requireCapability } from "@/lib/auth/require-role";
 import { requireAuth } from "@/lib/auth/require-role";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { updateGhlOpportunity, updateGhlContact, createGhlContact, createGhlOpportunity } from "@/lib/ghl/api";
+import { updateGhlOpportunity, updateGhlContact, createGhlContact, createGhlOpportunity, searchGhlOpportunitiesInPipeline } from "@/lib/ghl/api";
 import { updateCachedOppStage } from "@/lib/data/ghl-cache.repository";
 import { normalizePhone } from "@/lib/utils/phone";
 import type { NoteType } from "@/lib/data/lead-notes.repository";
@@ -747,6 +747,102 @@ export async function updateLeadContactInfo(
   } catch (err: any) {
     return { error: err.message ?? "Error al actualizar el contacto" };
   }
+}
+
+export type ImportRow = {
+  nombre:   string;
+  email:    string;
+  telefono: string;
+  origen:   string;
+  curso:    string;
+};
+
+export type ImportResult = {
+  imported: number;
+  skipped:  number;
+  errors:   Array<{ nombre: string; error: string }>;
+};
+
+export async function importLeadsFromCsv(
+  rows:       ImportRow[],
+  pipelineId: string,
+  stageId:    string,
+): Promise<ImportResult> {
+  await requireCapability("viewPipeline");
+  const user = await requireAuth();
+  const db   = createAdminClient() as any;
+
+  const cursoFieldId  = process.env.GHL_CURSO_FIELD_ID        ?? null;
+  const origenFieldId = process.env.GHL_ORIGEN_LEAD_FIELD_ID  ?? null;
+
+  // Deduplicar dentro del propio CSV por teléfono normalizado
+  const seenPhones = new Set<string>();
+  const deduped: ImportRow[] = [];
+  for (const row of rows) {
+    const key = normalizePhone(row.telefono?.trim() ?? "")?.replace(/\D/g, "") ?? row.nombre.toLowerCase();
+    if (seenPhones.has(key)) continue;
+    seenPhones.add(key);
+    deduped.push(row);
+  }
+
+  let imported = 0;
+  let skipped  = 0;
+  const errors: ImportResult["errors"] = [];
+
+  for (const row of deduped) {
+    try {
+      const rawPhone      = row.telefono?.trim() ? normalizePhone(row.telefono.trim()) : null;
+      const validPhone    = rawPhone?.startsWith("+") ? rawPhone : undefined;
+
+      // Comprobar si ya existe una oportunidad en este pipeline para este teléfono
+      if (row.telefono?.trim()) {
+        const existing = await searchGhlOpportunitiesInPipeline(pipelineId, row.telefono.trim(), 5);
+        if (existing.length > 0) {
+          skipped++;
+          continue;
+        }
+      }
+
+      const contact = await createGhlContact({
+        name:  row.nombre.trim(),
+        email: row.email?.trim()  || undefined,
+        phone: validPhone,
+      });
+
+      const opp = await createGhlOpportunity({
+        pipelineId,
+        pipelineStageId: stageId,
+        contactId:       contact.id,
+        name:            row.nombre.trim(),
+        customFields: (() => {
+          const fields: Array<{ id: string; field_value: string }> = [];
+          if (cursoFieldId  && row.curso?.trim())   fields.push({ id: cursoFieldId,  field_value: row.curso.trim()   });
+          if (origenFieldId && row.origen?.trim())  fields.push({ id: origenFieldId, field_value: row.origen.trim()  });
+          return fields.length ? fields : undefined;
+        })(),
+      });
+
+      await db.from("lead_profiles").upsert(
+        { ghl_contact_id: contact.id, origen: row.origen?.trim() || null, curso_interes: row.curso?.trim() || null },
+        { onConflict: "ghl_contact_id" },
+      );
+
+      await db.from("lead_notes").insert({
+        ghl_contact_id:     contact.id,
+        ghl_opportunity_id: opp.id,
+        type:               "nota",
+        content:            `📥 Lead importado desde Esmera Online\nOrigen: ${row.origen || "—"}\nCurso: ${row.curso || "—"}`,
+        created_by:         user.id,
+        created_by_name:    user.fullName ?? user.email ?? "Sistema",
+      });
+
+      imported++;
+    } catch (err: any) {
+      errors.push({ nombre: row.nombre, error: err.message ?? "Error desconocido" });
+    }
+  }
+
+  return { imported, skipped, errors };
 }
 
 export async function bulkAssignSetter(
