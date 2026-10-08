@@ -15,9 +15,9 @@ function loadTemplate(): string {
 const s = StyleSheet.create({
   page:       { padding: 0 },
   bg:         { position: "absolute", top: 0, left: 0, width: "100%", height: "100%" },
-  name:       { position: "absolute", top: 196, left: 0, right: 0, textAlign: "center", fontSize: 15, fontFamily: "Helvetica-Bold", color: "#1a1a1a", letterSpacing: 1.5 },
-  course:     { position: "absolute", top: 234, left: 60, right: 60, textAlign: "center", fontSize: 12, fontFamily: "Helvetica-Bold", color: "#1a1a1a" },
-  certNumber: { position: "absolute", top: 396, left: 370, fontSize: 9, fontFamily: "Helvetica", color: "#333" },
+  name:       { position: "absolute", top: 214, left: 0, right: 0, textAlign: "center", fontSize: 15, fontFamily: "Helvetica-Bold", color: "#1a1a1a", letterSpacing: 1.5 },
+  course:     { position: "absolute", top: 252, left: 60, right: 60, textAlign: "center", fontSize: 12, fontFamily: "Helvetica-Bold", color: "#1a1a1a" },
+  certNumber: { position: "absolute", top: 396, left: 370, fontSize: 7, fontFamily: "Helvetica", color: "#333" },
   qr:         { position: "absolute", top: 44,  left: 670, width: 118, height: 118 },
   startDate:  { position: "absolute", top: 505, left: 660, fontSize: 9, fontFamily: "Helvetica-Bold", color: "#1a1a1a" },
   endDate:    { position: "absolute", top: 529, left: 660, fontSize: 9, fontFamily: "Helvetica-Bold", color: "#1a1a1a" },
