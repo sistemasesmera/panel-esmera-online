@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useRef } from "react";
 import QRCode from "react-qr-code";
-import { Award, Plus, Search, X, Loader2, ShieldOff } from "lucide-react";
+import { Award, Plus, Search, X, Loader2, ShieldOff, Download } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { CertificateRow, EnrollmentPreview } from "@/lib/data/certificates.repository";
@@ -339,6 +339,15 @@ function DetailDrawer({
           <DataRow label="Fin"      value={formatDate(cert.end_date)} />
           <DataRow label="Emitido"  value={formatDate(cert.issued_at)} />
         </div>
+
+        <a
+          href={`/api/certificates/${cert.id}/pdf`}
+          download
+          className="flex items-center justify-center gap-2 w-full rounded-xl bg-slate-800 text-white text-sm font-semibold px-4 py-2.5 hover:bg-slate-900 transition-colors"
+        >
+          <Download className="h-4 w-4" />
+          Descargar certificado PDF
+        </a>
 
         {cert.active && (
           <button onClick={() => setConfirmOpen(true)} className={btnDanger}>
