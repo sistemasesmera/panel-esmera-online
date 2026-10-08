@@ -374,6 +374,15 @@ export function CertificatesClient({ initial }: { initial: CertificateRow[] }) {
   const [certs,       setCerts]       = useState<CertificateRow[]>(initial);
   const [createOpen,  setCreateOpen]  = useState(false);
   const [selected,    setSelected]    = useState<CertificateRow | null>(null);
+  const [query,       setQuery]       = useState("");
+
+  const filtered = query.trim()
+    ? certs.filter(c =>
+        c.certificate_number?.toLowerCase().includes(query.toLowerCase()) ||
+        c.student_name?.toLowerCase().includes(query.toLowerCase()) ||
+        c.course_name?.toLowerCase().includes(query.toLowerCase())
+      )
+    : certs;
 
   function handleCreated(cert: CertificateRow) {
     setCerts(prev => [cert, ...prev]);
@@ -386,11 +395,11 @@ export function CertificatesClient({ initial }: { initial: CertificateRow[] }) {
   return (
     <>
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-xl font-black text-slate-900">Certificados</h1>
           <p className="text-sm text-slate-400 mt-0.5">
-            {certs.length} certificado{certs.length !== 1 ? "s" : ""} emitido{certs.length !== 1 ? "s" : ""}
+            {filtered.length} de {certs.length} certificado{certs.length !== 1 ? "s" : ""}
           </p>
         </div>
         <button onClick={() => setCreateOpen(true)} className="flex items-center gap-1.5 bg-indigo-600 text-white text-sm font-semibold px-3.5 py-2 rounded-xl hover:bg-indigo-700 transition-colors">
@@ -399,11 +408,31 @@ export function CertificatesClient({ initial }: { initial: CertificateRow[] }) {
         </button>
       </div>
 
+      {/* Buscador */}
+      <div className="relative mb-5">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+        <input
+          type="text"
+          placeholder="Buscar por código, alumno o curso…"
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          className={cn(inputCls, "pl-8")}
+        />
+        {query && (
+          <button
+            onClick={() => setQuery("")}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </div>
+
       {/* Table */}
-      {certs.length === 0 ? (
+      {filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 text-slate-400 gap-3">
           <Award className="h-10 w-10 opacity-20" />
-          <p className="text-sm">No hay certificados emitidos aún</p>
+          <p className="text-sm">{query ? "Sin resultados para esa búsqueda" : "No hay certificados emitidos aún"}</p>
         </div>
       ) : (
         <div className="rounded-2xl border border-slate-200 overflow-hidden">
@@ -418,7 +447,7 @@ export function CertificatesClient({ initial }: { initial: CertificateRow[] }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {certs.map(cert => (
+              {filtered.map(cert => (
                 <tr
                   key={cert.id}
                   onClick={() => setSelected(cert)}
