@@ -215,7 +215,7 @@ function CreateDrawer({
     });
   }
 
-  const certNumber = preview ? String(preview.enrollment_number) : null;
+  const certNumber = preview ? `??????-${preview.enrollment_number}` : null;
   const qrUrl      = certNumber ? `${QR_BASE}/${certNumber}` : null;
 
   return (
@@ -262,6 +262,7 @@ function CreateDrawer({
             <span className="text-xs font-mono font-semibold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-lg">
               Nº {certNumber}
             </span>
+            <p className="text-[10px] text-slate-400 text-center">El código aleatorio se genera al guardar</p>
           </div>
 
           <button

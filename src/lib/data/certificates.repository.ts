@@ -1,6 +1,12 @@
 import "server-only";
+import { randomBytes } from "crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { CreateCertificateInput } from "@/lib/domain/certificates/schema";
+
+function generateCertNumber(enrollmentNumber: number): string {
+  const prefix = randomBytes(3).toString("hex").toUpperCase(); // e.g. "A3F9C2"
+  return `${prefix}-${enrollmentNumber}`;                      // e.g. "A3F9C2-20067"
+}
 
 export type CertificateRow = {
   id: string;
@@ -15,7 +21,6 @@ export type CertificateRow = {
   issued_at: string | null;
   created_by: string | null;
   created_at: string;
-  enrollment: { enrollment_number: number } | null;
 };
 
 export type EnrollmentPreview = {
@@ -29,17 +34,16 @@ export type EnrollmentPreview = {
 };
 
 const CERT_SELECT =
-  "id, certificate_number, enrollment_id, student_name, course_name, hours, start_date, end_date, active, issued_at, created_by, created_at, enrollment:enrollments!enrollment_id(enrollment_number)";
+  "id, certificate_number, enrollment_id, student_name, course_name, hours, start_date, end_date, active, issued_at, created_by, created_at";
 
 export async function listCertificates(): Promise<CertificateRow[]> {
   const db = createAdminClient() as any;
   const { data, error } = await db
     .from("certificates")
     .select(CERT_SELECT)
-    .not("certificate_number", "is", null)
     .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
-  return (data ?? []) as CertificateRow[];
+  return ((data ?? []) as CertificateRow[]).filter(c => c.certificate_number != null);
 }
 
 export async function getCertificateByNumber(
@@ -119,7 +123,7 @@ export async function createCertificate(
   createdBy: string
 ): Promise<CertificateRow> {
   const db = createAdminClient() as any;
-  const certificateNumber = String(enrollmentNumber);
+  const certificateNumber = generateCertNumber(enrollmentNumber);
 
   const { data, error } = await db
     .from("certificates")
