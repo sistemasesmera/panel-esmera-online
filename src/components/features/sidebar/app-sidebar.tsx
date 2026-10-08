@@ -7,7 +7,7 @@ import { useState } from "react";
 import {
   LayoutDashboard, Kanban, GraduationCap, BookOpen,
   BookMarked, ScrollText, Settings, LogOut, CalendarCheck, CalendarDays, Zap,
-  ChevronLeft, ChevronRight,
+  ChevronLeft, ChevronRight, Award,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { AppRole } from "@/lib/domain/shared/permissions";
@@ -34,8 +34,9 @@ const GROUPS: NavGroup[] = [
     items: [
       { label: "Alumnos",    href: "/students",     icon: GraduationCap, roles: ["setter", "closer", "administracion"] },
       { label: "Matrículas", href: "/enrollments",  icon: BookMarked,    roles: ["setter", "closer", "administracion", "tutor"] },
-      { label: "Cursos",     href: "/courses",      icon: BookOpen,      roles: ["setter", "closer", "administracion"] },
-      { label: "Tutorías",   href: "/tutoring",     icon: CalendarCheck, roles: ["tutor", "administracion"] },
+      { label: "Cursos",        href: "/courses",       icon: BookOpen,      roles: ["setter", "closer", "administracion"] },
+      { label: "Certificados", href: "/certificates", icon: Award,         roles: ["administracion"] },
+      { label: "Tutorías",     href: "/tutoring",     icon: CalendarCheck, roles: ["tutor", "administracion"] },
     ],
   },
   {

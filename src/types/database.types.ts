@@ -133,9 +133,17 @@ export interface Database {
         Row: {
           id: string;
           enrollment_id: string;
+          certificate_number: string | null;
+          student_name: string | null;
+          course_name: string | null;
+          hours: number | null;
+          start_date: string | null;
+          end_date: string | null;
+          active: boolean;
           status: string;
           issued_at: string | null;
           document_url: string | null;
+          created_by: string | null;
           created_at: string;
           updated_at: string | null;
         };
