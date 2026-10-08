@@ -176,6 +176,7 @@ export async function upsertLeadProfile(
   if (cualificandoStageId && oppId) {
     try {
       await updateGhlOpportunity(oppId, { pipelineStageId: cualificandoStageId });
+      await updateCachedOppStage(oppId, cualificandoStageId).catch(() => {});
       advancedStageId = cualificandoStageId;
       await db.from("lead_notes").insert({
         ghl_contact_id:     contactId,
@@ -544,6 +545,7 @@ export async function createLeadActivity(fd: FormData) {
   if (contactandoStageId && oppId) {
     try {
       await updateGhlOpportunity(oppId, { pipelineStageId: contactandoStageId });
+      await updateCachedOppStage(oppId, contactandoStageId).catch(() => {});
       advancedStageId = contactandoStageId;
       await db.from("lead_notes").insert({
         ghl_contact_id:     contactId,

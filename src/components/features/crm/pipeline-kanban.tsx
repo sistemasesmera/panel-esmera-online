@@ -423,7 +423,7 @@ function ListView({
   return (
     <div
       className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden card-shadow flex flex-col"
-      style={{ height: "calc(100vh - 280px)", minHeight: "300px" }}
+      style={{ height: "calc(100vh - 210px)", minHeight: "400px" }}
     >
       <div className="overflow-y-auto flex-1 min-h-0">
       <table className="w-full text-sm">
@@ -1199,12 +1199,23 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser }: Pro
           onClose={() => setSheetOpp(null)}
           onAction={() => { setSheetOpp(null); setVersion(v => v + 1); }}
           onStageChange={(oppId, newStageId, newStageName) => {
-            // Move the opp in stageData optimistically (same as DnD)
-            const opp = allOpps.find(o => o.id === oppId);
+            // Buscar el opp en stageData (kanban) o en listData (vista lista)
+            const oppInStage = allOpps.find(o => o.id === oppId);
+            const oppInList  = listData.opps.find(o => o.id === oppId);
+            const opp        = oppInStage ?? oppInList;
+
+            // Siempre actualizar el sheet aunque no encontremos el opp en los datos
+            setSheetOpp(prev => prev?.id === oppId
+              ? { ...prev, pipelineStageId: newStageId, pipelineStageName: newStageName }
+              : prev
+            );
+
             if (!opp) return;
             const sourceStageId = opp.pipelineStageId;
             if (sourceStageId === newStageId) return;
             const movedOpp = { ...opp, pipelineStageId: newStageId, pipelineStageName: newStageName };
+
+            // Mover en stageData (kanban)
             setStageData(prev => {
               const next = { ...prev };
               if (next[sourceStageId]) {
@@ -1215,10 +1226,12 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser }: Pro
               }
               return next;
             });
-            setSheetOpp(prev => prev?.id === oppId
-              ? { ...prev, pipelineStageId: newStageId, pipelineStageName: newStageName }
-              : prev
-            );
+
+            // Actualizar también listData para que la vista lista refleje el cambio
+            setListData(prev => ({
+              ...prev,
+              opps: prev.opps.map(o => o.id === oppId ? movedOpp : o),
+            }));
           }}
         />
       )}
