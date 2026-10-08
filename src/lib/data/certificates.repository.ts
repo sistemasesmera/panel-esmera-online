@@ -59,6 +59,20 @@ export async function getCertificateByNumber(
   return data as CertificateRow;
 }
 
+export async function searchPublicCertificates(query: string): Promise<CertificateRow[]> {
+  const db = createAdminClient() as any;
+  const { data, error } = await db
+    .from("certificates")
+    .select(CERT_SELECT)
+    .eq("active", true)
+    .not("certificate_number", "is", null)
+    .or(`certificate_number.ilike.%${query}%,student_name.ilike.%${query}%`)
+    .order("issued_at", { ascending: false })
+    .limit(8);
+  if (error) return [];
+  return (data ?? []) as CertificateRow[];
+}
+
 export async function getEnrollmentPreview(
   enrollmentId: string
 ): Promise<EnrollmentPreview | null> {
