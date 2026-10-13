@@ -88,15 +88,28 @@ export async function POST(req: NextRequest) {
       phone: phone?.trim() ? normalizePhone(phone.trim()) : undefined,
     });
 
-    const opp = await createGhlOpportunity({
-      pipelineId,
-      pipelineStageId,
-      contactId:    contact.id,
-      name:         name.trim(),
-      customFields: customFields.length ? customFields : undefined,
-    });
+    let oppId: string;
+    try {
+      const opp = await createGhlOpportunity({
+        pipelineId,
+        pipelineStageId,
+        contactId:    contact.id,
+        name:         name.trim(),
+        customFields: customFields.length ? customFields : undefined,
+      });
+      oppId = opp.id;
+    } catch (oppErr: unknown) {
+      const oppMsg = oppErr instanceof Error ? oppErr.message : String(oppErr);
+      // Contacto ya tiene oportunidad — extraer el id existente y continuar
+      const existingMatch = oppMsg.match(/"existingId"\s*:\s*"([^"]+)"/);
+      if (existingMatch) {
+        oppId = existingMatch[1];
+      } else {
+        throw oppErr;
+      }
+    }
 
-    return NextResponse.json({ success: true, contactId: contact.id, oppId: opp.id }, { headers: CORS_HEADERS });
+    return NextResponse.json({ success: true, contactId: contact.id, oppId }, { headers: CORS_HEADERS });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: msg }, { status: 502, headers: CORS_HEADERS });
