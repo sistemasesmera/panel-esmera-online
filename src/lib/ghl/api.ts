@@ -291,9 +291,11 @@ export async function updateGhlContact(
 }
 
 export async function createGhlContact(data: {
-  name:   string;
-  email?: string;
-  phone?: string;
+  name:    string;
+  email?:  string;
+  phone?:  string;
+  source?: string;
+  tags?:   string[];
 }): Promise<GhlContact> {
   const locationId = process.env.GHL_LOCATION_ID;
   if (!locationId)              throw new Error("GHL_LOCATION_ID not set");
@@ -303,9 +305,11 @@ export async function createGhlContact(data: {
   const lastName = rest.join(" ") || undefined;
 
   const body: Record<string, unknown> = { locationId, firstName };
-  if (lastName)    body.lastName = lastName;
-  if (data.email)  body.email   = data.email;
-  if (data.phone)  body.phone   = data.phone;
+  if (lastName)        body.lastName = lastName;
+  if (data.email)      body.email    = data.email;
+  if (data.phone)      body.phone    = data.phone;
+  if (data.source)     body.source   = data.source;
+  if (data.tags?.length) body.tags   = data.tags;
 
   const res = await fetch(`${GHL_API_BASE}/contacts/`, {
     method:  "POST",
