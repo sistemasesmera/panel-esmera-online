@@ -12,6 +12,7 @@ import type { UserRow } from "@/lib/data/users.repository";
 const ROLE_COLORS: Record<AppRole, string> = {
   setter:         "bg-blue-50 text-blue-600 ring-1 ring-blue-200/60",
   closer:         "bg-violet-50 text-violet-600 ring-1 ring-violet-200/60",
+  setter_closer:  "bg-indigo-50 text-indigo-600 ring-1 ring-indigo-200/60",
   administracion: "bg-indigo-50 text-indigo-600 ring-1 ring-indigo-200/60",
   tutor:          "bg-teal-50 text-teal-600 ring-1 ring-teal-200/60",
 };

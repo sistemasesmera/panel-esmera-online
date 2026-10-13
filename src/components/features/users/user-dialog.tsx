@@ -17,6 +17,7 @@ const inputCls = "w-full text-sm border border-slate-200 rounded-lg px-3 py-2 fo
 const ROLE_COLORS: Record<AppRole, string> = {
   setter:         "bg-blue-50 text-blue-700 ring-1 ring-blue-200/60",
   closer:         "bg-violet-50 text-violet-700 ring-1 ring-violet-200/60",
+  setter_closer:  "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200/60",
   administracion: "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200/60",
   tutor:          "bg-teal-50 text-teal-700 ring-1 ring-teal-200/60",
 };

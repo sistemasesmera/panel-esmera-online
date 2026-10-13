@@ -25,16 +25,16 @@ const GROUPS: NavGroup[] = [
   {
     label: "Comercial",
     items: [
-      { label: "Pipeline",   href: "/crm/pipeline", icon: Kanban,        roles: ["setter", "closer", "administracion"] },
-      { label: "Agenda",     href: "/agenda",        icon: CalendarDays,  roles: ["setter", "closer", "administracion"] },
+      { label: "Pipeline",   href: "/crm/pipeline", icon: Kanban,        roles: ["setter", "closer", "setter_closer", "administracion"] },
+      { label: "Agenda",     href: "/agenda",        icon: CalendarDays,  roles: ["setter", "closer", "setter_closer", "administracion"] },
     ],
   },
   {
     label: "Académico",
     items: [
-      { label: "Alumnos",    href: "/students",     icon: GraduationCap, roles: ["setter", "closer", "administracion"] },
-      { label: "Matrículas", href: "/enrollments",  icon: BookMarked,    roles: ["setter", "closer", "administracion", "tutor"] },
-      { label: "Cursos",        href: "/courses",       icon: BookOpen,      roles: ["setter", "closer", "administracion"] },
+      { label: "Alumnos",    href: "/students",     icon: GraduationCap, roles: ["setter", "closer", "setter_closer", "administracion"] },
+      { label: "Matrículas", href: "/enrollments",  icon: BookMarked,    roles: ["setter", "closer", "setter_closer", "administracion", "tutor"] },
+      { label: "Cursos",        href: "/courses",       icon: BookOpen,      roles: ["setter", "closer", "setter_closer", "administracion"] },
       { label: "Certificados", href: "/certificates", icon: Award,         roles: ["administracion"] },
       { label: "Tutorías",     href: "/tutoring",     icon: CalendarCheck, roles: ["tutor", "administracion"] },
     ],
@@ -51,6 +51,7 @@ const GROUPS: NavGroup[] = [
 const ROLE_LABELS: Record<AppRole, string> = {
   setter:         "Setter",
   closer:         "Closer",
+  setter_closer:  "Setter / Closer",
   administracion: "Administración",
   tutor:          "Tutor",
 };
@@ -58,6 +59,7 @@ const ROLE_LABELS: Record<AppRole, string> = {
 const ROLE_COLORS: Record<AppRole, string> = {
   setter:         "bg-sky-50 text-sky-600 ring-1 ring-sky-200/60",
   closer:         "bg-violet-50 text-violet-600 ring-1 ring-violet-200/60",
+  setter_closer:  "bg-indigo-50 text-indigo-600 ring-1 ring-indigo-200/60",
   administracion: "bg-teal-50 text-teal-600 ring-1 ring-teal-200/60",
   tutor:          "bg-amber-50 text-amber-600 ring-1 ring-amber-200/60",
 };
