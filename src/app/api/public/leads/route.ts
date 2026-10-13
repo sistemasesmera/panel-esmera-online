@@ -21,7 +21,7 @@ function normalizePhone(raw: string): string | undefined {
 export async function POST(req: NextRequest) {
   // Auth
   const token = req.headers.get("x-api-key");
-  if (!token || token !== process.env.PUBLIC_LEADS_TOKEN) {
+  if (!token || token !== process.env.LEADS_API_TOKEN) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 
