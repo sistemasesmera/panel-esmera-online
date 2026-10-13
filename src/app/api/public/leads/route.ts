@@ -3,6 +3,16 @@ import { z } from "zod";
 import { createGhlContact, createGhlOpportunity, fetchGhlPipelines } from "@/lib/ghl/api";
 import { SETTER_STAGES } from "@/lib/domain/shared/permissions";
 
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin":  "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, x-api-key",
+};
+
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: CORS_HEADERS });
+}
+
 const schema = z.object({
   name:   z.string().min(1, "El nombre es obligatorio").max(200),
   email:  z.string().email().optional().or(z.literal("")),
@@ -22,7 +32,7 @@ export async function POST(req: NextRequest) {
   // Auth
   const token = req.headers.get("x-api-key");
   if (!token || token !== process.env.LEADS_API_TOKEN) {
-    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    return NextResponse.json({ error: "No autorizado" }, { status: 401, headers: CORS_HEADERS });
   }
 
   // Parse + validate
@@ -30,14 +40,14 @@ export async function POST(req: NextRequest) {
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
+    return NextResponse.json({ error: "JSON inválido" }, { status: 400, headers: CORS_HEADERS });
   }
 
   const parsed = schema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
       { error: parsed.error.issues[0]?.message ?? "Datos inválidos" },
-      { status: 400 },
+      { status: 400, headers: CORS_HEADERS },
     );
   }
 
@@ -59,7 +69,7 @@ export async function POST(req: NextRequest) {
     pipelineStageId = firstSetterStage.id;
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: `Error al conectar con GHL: ${msg}` }, { status: 502 });
+    return NextResponse.json({ error: `Error al conectar con GHL: ${msg}` }, { status: 502, headers: CORS_HEADERS });
   }
 
   // Build custom fields
@@ -86,9 +96,9 @@ export async function POST(req: NextRequest) {
       customFields: customFields.length ? customFields : undefined,
     });
 
-    return NextResponse.json({ success: true, contactId: contact.id, oppId: opp.id });
+    return NextResponse.json({ success: true, contactId: contact.id, oppId: opp.id }, { headers: CORS_HEADERS });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: msg }, { status: 502 });
+    return NextResponse.json({ error: msg }, { status: 502, headers: CORS_HEADERS });
   }
 }
