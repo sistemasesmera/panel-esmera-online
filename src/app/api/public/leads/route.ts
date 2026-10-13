@@ -124,6 +124,7 @@ export async function POST(req: NextRequest) {
     cf("fbp",           d.fbp),
     cf("course_id",     d.course_id !== "sin_definir" ? d.course_id : undefined),
     cf("course_name",   d.course_name),
+    cf("curso",         d.course_name),
     cf("event_id",      d.event_id),
   ].filter((f): f is { id: string; field_value: string } => f !== null);
 
