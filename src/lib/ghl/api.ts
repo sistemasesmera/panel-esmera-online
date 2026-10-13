@@ -291,11 +291,12 @@ export async function updateGhlContact(
 }
 
 export async function createGhlContact(data: {
-  name:    string;
-  email?:  string;
-  phone?:  string;
-  source?: string;
-  tags?:   string[];
+  name:          string;
+  email?:        string;
+  phone?:        string;
+  source?:       string;
+  tags?:         string[];
+  customFields?: Array<{ id: string; field_value: string }>;
 }): Promise<GhlContact> {
   const locationId = process.env.GHL_LOCATION_ID;
   if (!locationId)              throw new Error("GHL_LOCATION_ID not set");
@@ -305,11 +306,12 @@ export async function createGhlContact(data: {
   const lastName = rest.join(" ") || undefined;
 
   const body: Record<string, unknown> = { locationId, firstName };
-  if (lastName)        body.lastName = lastName;
-  if (data.email)      body.email    = data.email;
-  if (data.phone)      body.phone    = data.phone;
-  if (data.source)     body.source   = data.source;
-  if (data.tags?.length) body.tags   = data.tags;
+  if (lastName)                    body.lastName     = lastName;
+  if (data.email)                  body.email        = data.email;
+  if (data.phone)                  body.phone        = data.phone;
+  if (data.source)                 body.source       = data.source;
+  if (data.tags?.length)           body.tags         = data.tags;
+  if (data.customFields?.length)   body.customFields = data.customFields;
 
   const res = await fetch(`${GHL_API_BASE}/contacts/`, {
     method:  "POST",
@@ -319,9 +321,16 @@ export async function createGhlContact(data: {
 
   if (!res.ok) {
     const errJson = await res.json().catch(() => null);
-    // Duplicate contact — reuse the existing one
     const existingId = errJson?.meta?.contactId as string | undefined;
     if (existingId) {
+      // Duplicate — update custom fields on existing contact, then return it
+      if (data.customFields?.length) {
+        await fetch(`${GHL_API_BASE}/contacts/${existingId}`, {
+          method:  "PUT",
+          headers: ghlHeaders(),
+          body:    JSON.stringify({ customFields: data.customFields }),
+        }).catch(() => { /* non-fatal */ });
+      }
       const existing = await fetchGhlContact(existingId);
       if (existing) return existing;
     }

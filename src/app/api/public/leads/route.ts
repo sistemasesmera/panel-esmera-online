@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { createGhlContact } from "@/lib/ghl/api";
+import { createGhlContact, fetchGhlCustomFieldDefs } from "@/lib/ghl/api";
 
 const ALLOWED_ORIGINS = [
   "https://www.esmeraonline.com",
@@ -88,21 +88,49 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true }, { headers: cors });
   }
 
-  // Custom fields
-  const cursoFieldId  = process.env.GHL_CURSO_FIELD_ID       ?? null;
-  const origenFieldId = process.env.GHL_ORIGEN_LEAD_FIELD_ID ?? null;
+  // Fetch GHL custom field definitions to build key→id map
+  let fieldMap: Record<string, string> = {};
+  try {
+    const defs = await fetchGhlCustomFieldDefs();
+    for (const f of defs) {
+      const key = (f.fieldKey.split(".").pop() ?? f.fieldKey).toLowerCase();
+      fieldMap[key] = f.id;
+    }
+  } catch { /* proceed without custom fields if GHL is unreachable */ }
 
-  const customFields: Array<{ id: string; field_value: string }> = [];
-  if (cursoFieldId  && d.course_id) customFields.push({ id: cursoFieldId,  field_value: d.course_id });
-  if (origenFieldId)                customFields.push({ id: origenFieldId, field_value: "WEB" });
+  function cf(key: string, value: string | undefined): { id: string; field_value: string } | null {
+    const v = value?.trim();
+    if (!v || !fieldMap[key]) return null;
+    return { id: fieldMap[key], field_value: v };
+  }
+
+  const customFields = [
+    cf("lead_source",   "WEB"),
+    cf("utm_source",    d.utm_source),
+    cf("utm_medium",    d.utm_medium),
+    cf("utm_campaign",  d.utm_campaign),
+    cf("utm_term",      d.utm_term),
+    cf("utm_content",   d.utm_content),
+    cf("landing_page",  d.landing_page),
+    cf("referrer",      d.referrer),
+    cf("form_location", d.form_location),
+    cf("gbraid",        d.gbraid),
+    cf("wbraid",        d.wbraid),
+    cf("web_gclid",     d.gclid),
+    cf("fbclid",        d.fbclid),
+    cf("fbc",           d.fbc),
+    cf("fbp",           d.fbp),
+    cf("course_id",     d.course_id !== "sin_definir" ? d.course_id : undefined),
+    cf("event_id",      d.event_id),
+  ].filter((f): f is { id: string; field_value: string } => f !== null);
 
   try {
     await createGhlContact({
-      name:   d.nombre.trim(),
-      email:  d.email  || undefined,
-      phone:  d.telefono ? normalizePhone(d.telefono) : undefined,
-      source: "WEB",
-      tags:   d.utm_source ? [`utm_source:${d.utm_source}`] : undefined,
+      name:         d.nombre.trim(),
+      email:        d.email || undefined,
+      phone:        d.telefono ? normalizePhone(d.telefono) : undefined,
+      source:       "WEB",
+      customFields: customFields.length ? customFields : undefined,
     });
 
     return NextResponse.json({ ok: true }, { headers: cors });
