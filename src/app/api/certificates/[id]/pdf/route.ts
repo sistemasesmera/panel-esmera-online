@@ -17,7 +17,7 @@ export async function GET(
   const db = createAdminClient() as any;
   const { data: cert, error } = await db
     .from("certificates")
-    .select("certificate_number, student_name, course_name, issued_at")
+    .select("certificate_number, student_name, course_name, hours, issued_at, syllabus")
     .eq("id", id)
     .single();
 

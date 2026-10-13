@@ -21,6 +21,7 @@ export type CertificateRow = {
   issued_at: string | null;
   created_by: string | null;
   created_at: string;
+  syllabus: string | null;
 };
 
 export type EnrollmentPreview = {
@@ -34,7 +35,7 @@ export type EnrollmentPreview = {
 };
 
 const CERT_SELECT =
-  "id, certificate_number, enrollment_id, student_name, course_name, hours, start_date, end_date, active, issued_at, created_by, created_at";
+  "id, certificate_number, enrollment_id, student_name, course_name, hours, start_date, end_date, active, issued_at, created_by, created_at, syllabus";
 
 export async function listCertificates(): Promise<CertificateRow[]> {
   const db = createAdminClient() as any;
@@ -159,6 +160,15 @@ export async function createCertificate(
 
   if (error) throw new Error(error.message);
   return data as CertificateRow;
+}
+
+export async function updateCertificateSyllabus(id: string, syllabus: string): Promise<void> {
+  const db = createAdminClient() as any;
+  const { error } = await db
+    .from("certificates")
+    .update({ syllabus, updated_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) throw new Error(error.message);
 }
 
 export async function deactivateCertificate(id: string): Promise<void> {

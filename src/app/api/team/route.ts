@@ -15,9 +15,9 @@ export async function GET(req: NextRequest) {
     .order("full_name", { ascending: true });
 
   if (role === "setter" || role === "closer") {
-    query = query.in("role", [role, "administracion"]);
+    query = query.in("role", [role, "setter_closer", "administracion"]);
   } else {
-    query = query.in("role", ["setter", "closer", "administracion"]);
+    query = query.in("role", ["setter", "closer", "setter_closer", "administracion"]);
   }
 
   const { data, error } = await query;

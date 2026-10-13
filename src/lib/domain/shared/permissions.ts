@@ -1,21 +1,22 @@
-export const APP_ROLES = ["setter", "closer", "administracion", "tutor"] as const;
+export const APP_ROLES = ["setter", "closer", "setter_closer", "administracion", "tutor"] as const;
 export type AppRole = (typeof APP_ROLES)[number];
 
 export const ROLE_LABELS: Record<AppRole, string> = {
   setter: "Setter",
   closer: "Closer",
+  setter_closer: "Setter / Closer",
   administracion: "Administración",
   tutor: "Tutor",
 };
 
 export const CAPABILITIES = {
-  viewPipeline:       ["setter", "closer", "administracion"] as AppRole[],
+  viewPipeline:       ["setter", "closer", "setter_closer", "administracion"] as AppRole[],
   viewFullPipeline:   ["administracion"] as AppRole[],
-  viewEnrollments:    ["setter", "closer", "administracion", "tutor"] as AppRole[],
-  manageEnrollments:  ["setter", "closer", "administracion"] as AppRole[],
-  viewStudents:       ["setter", "closer", "administracion", "tutor"] as AppRole[],
+  viewEnrollments:    ["setter", "closer", "setter_closer", "administracion", "tutor"] as AppRole[],
+  manageEnrollments:  ["setter", "closer", "setter_closer", "administracion"] as AppRole[],
+  viewStudents:       ["setter", "closer", "setter_closer", "administracion", "tutor"] as AppRole[],
   manageStudents:     ["administracion", "tutor"] as AppRole[],
-  viewCourses:        ["setter", "closer", "administracion"] as AppRole[],
+  viewCourses:        ["setter", "closer", "setter_closer", "administracion"] as AppRole[],
   manageCourses:      ["administracion"] as AppRole[],
   viewTutoring:       ["tutor", "administracion"] as AppRole[],
   viewLogs:           ["administracion"] as AppRole[],

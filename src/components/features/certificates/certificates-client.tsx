@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useRef } from "react";
+import { useState, useTransition, useRef, useEffect } from "react";
 import QRCode from "react-qr-code";
 import { Award, Plus, Search, X, Loader2, ShieldOff, Download } from "lucide-react";
 import { toast } from "sonner";
@@ -10,6 +10,7 @@ import {
   createCertificateAction,
   deactivateCertificateAction,
   searchEnrollmentsAction,
+  updateSyllabusAction,
 } from "@/app/(app)/certificates/actions";
 
 const QR_BASE = "https://esmeraonline.com/verificar-certificado";
@@ -284,14 +285,19 @@ function CreateDrawer({
 // ── Detail drawer ───────────────────────────────────────────────────────────
 
 function DetailDrawer({
-  cert, onClose, onDeactivated,
+  cert, onClose, onDeactivated, onSyllabusUpdated,
 }: {
   cert: CertificateRow | null;
   onClose: () => void;
   onDeactivated: (id: string) => void;
+  onSyllabusUpdated: (id: string, syllabus: string) => void;
 }) {
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [isPending,   startTransition] = useTransition();
+  const [confirmOpen,      setConfirmOpen]  = useState(false);
+  const [syllabus,         setSyllabus]     = useState(cert?.syllabus ?? "");
+  const [isPending,        startTransition] = useTransition();
+  const [isSavingSyllabus, startSyllabus]   = useTransition();
+
+  useEffect(() => { setSyllabus(cert?.syllabus ?? ""); }, [cert?.id]);
 
   function handleDeactivate() {
     if (!cert) return;
@@ -301,6 +307,19 @@ function DetailDrawer({
       onDeactivated(cert.id);
       setConfirmOpen(false);
       onClose();
+    });
+  }
+
+  function handleSaveSyllabus() {
+    if (!cert) return;
+    startSyllabus(async () => {
+      try {
+        await updateSyllabusAction(cert.id, syllabus);
+        onSyllabusUpdated(cert.id, syllabus);
+        toast.success("Temario guardado");
+      } catch {
+        toast.error("Error al guardar el temario");
+      }
     });
   }
 
@@ -335,9 +354,26 @@ function DetailDrawer({
           <DataRow label="Alumno"   value={cert.student_name} />
           <DataRow label="Curso"    value={cert.course_name} />
           <DataRow label="Horas"    value={cert.hours != null ? `${cert.hours} h` : "—"} />
-          <DataRow label="Inicio"   value={formatDate(cert.start_date)} />
-          <DataRow label="Fin"      value={formatDate(cert.end_date)} />
           <DataRow label="Emitido"  value={formatDate(cert.issued_at)} />
+        </div>
+
+        {/* Temario */}
+        <div>
+          <label className={labelCls}>Temario (aparece en el reverso del PDF)</label>
+          <textarea
+            className={cn(inputCls, "min-h-[140px] resize-y")}
+            placeholder={"- Módulo 1: Introducción\n- Módulo 2: Técnicas básicas\n- Módulo 3: Práctica avanzada"}
+            value={syllabus}
+            onChange={e => setSyllabus(e.target.value)}
+          />
+          <button
+            onClick={handleSaveSyllabus}
+            disabled={isSavingSyllabus}
+            className="mt-2 flex items-center justify-center gap-2 w-full rounded-xl bg-teal-600 text-white text-sm font-semibold px-4 py-2.5 hover:bg-teal-700 transition-colors disabled:opacity-50"
+          >
+            {isSavingSyllabus ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            Guardar temario
+          </button>
         </div>
 
         <a
@@ -399,6 +435,11 @@ export function CertificatesClient({ initial }: { initial: CertificateRow[] }) {
 
   function handleDeactivated(id: string) {
     setCerts(prev => prev.map(c => c.id === id ? { ...c, active: false } : c));
+  }
+
+  function handleSyllabusUpdated(id: string, syllabus: string) {
+    setCerts(prev => prev.map(c => c.id === id ? { ...c, syllabus } : c));
+    setSelected(prev => prev?.id === id ? { ...prev, syllabus } : prev);
   }
 
   return (
@@ -493,6 +534,7 @@ export function CertificatesClient({ initial }: { initial: CertificateRow[] }) {
         cert={selected}
         onClose={() => setSelected(null)}
         onDeactivated={handleDeactivated}
+        onSyllabusUpdated={handleSyllabusUpdated}
       />
     </>
   );

@@ -5,6 +5,7 @@ import { createCertificateSchema } from "@/lib/domain/certificates/schema";
 import {
   createCertificate,
   deactivateCertificate,
+  updateCertificateSyllabus,
   getEnrollmentPreview,
   searchEnrollments,
   type EnrollmentPreview,
@@ -35,6 +36,12 @@ export async function getEnrollmentPreviewAction(
   const user = await getCurrentUser();
   if (!user || user.role !== "administracion") return null;
   return getEnrollmentPreview(enrollmentId);
+}
+
+export async function updateSyllabusAction(id: string, syllabus: string): Promise<void> {
+  const user = await getCurrentUser();
+  if (!user || user.role !== "administracion") throw new Error("Sin permisos");
+  await updateCertificateSyllabus(id, syllabus);
 }
 
 export async function searchEnrollmentsAction(query: string): Promise<EnrollmentPreview[]> {
