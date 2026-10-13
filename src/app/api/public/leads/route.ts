@@ -33,6 +33,7 @@ const schema = z.object({
   acepta_privacidad: z.boolean().default(true),
   form_location:     z.enum(["landing", "ficha_curso", "popup_asesor"]).default("ficha_curso"),
   course_id:         os,
+  course_name:       os,
   event_id:          os,
   utm_source:        os,
   utm_medium:        os,
@@ -106,6 +107,7 @@ export async function POST(req: NextRequest) {
 
   const customFields = [
     cf("lead_source",   "WEB"),
+    cf("origen_lead",   "WEB"),
     cf("utm_source",    d.utm_source),
     cf("utm_medium",    d.utm_medium),
     cf("utm_campaign",  d.utm_campaign),
@@ -121,6 +123,7 @@ export async function POST(req: NextRequest) {
     cf("fbc",           d.fbc),
     cf("fbp",           d.fbp),
     cf("course_id",     d.course_id !== "sin_definir" ? d.course_id : undefined),
+    cf("course_name",   d.course_name),
     cf("event_id",      d.event_id),
   ].filter((f): f is { id: string; field_value: string } => f !== null);
 
