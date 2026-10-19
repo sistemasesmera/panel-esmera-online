@@ -41,11 +41,15 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     supabase.from("students").select("*", { count: "exact", head: true }).is("deleted_at", null),
     supabase.from("enrollments").select("*", { count: "exact", head: true }).eq("status", "en_curso").is("deleted_at", null),
     supabase.from("enrollments").select("*", { count: "exact", head: true }).eq("status", "pendiente_firma").is("deleted_at", null),
-    supabase.from("contracts").select("amount, enrollments!enrollment_id(status)").eq("status", "firmado").gte("signed_at", monthStart) as unknown as Promise<{ data: Array<{ amount: number; enrollments: { status: string } | null }> | null; error: unknown }>,
+    supabase.from("contracts").select("amount, enrollments!enrollment_id(status, deleted_at)").eq("status", "firmado").gte("signed_at", monthStart) as unknown as Promise<{ data: Array<{ amount: number; enrollments: { status: string; deleted_at: string | null } | null }> | null; error: unknown }>,
     supabase.from("courses").select("*", { count: "exact", head: true }).eq("active", true),
   ]);
 
-  const activeContracts = (signedContracts ?? []).filter(c => c.enrollments?.status !== "cancelada");
+  const activeContracts = (signedContracts ?? []).filter(c =>
+    c.enrollments !== null &&
+    c.enrollments.deleted_at === null &&
+    c.enrollments.status !== "cancelada"
+  );
   const revenueThisMonth = activeContracts.reduce((s, c) => s + (c.amount ?? 0), 0);
   const signedContractsThisMonth = activeContracts.length;
 
