@@ -70,30 +70,36 @@ export async function getCloserSalesThisMonth(closerId?: string): Promise<Closer
 
   const { data, error } = await db
     .from("contracts")
-    .select("amount, enrollments!enrollment_id(closer_id, closer_name, status)")
+    .select("amount, enrollments!enrollment_id(closer_id, closer_name, status, deleted_at)")
     .eq("status", "firmado")
     .gte("signed_at", monthStart);
 
   if (error) throw new Error(error.message);
 
+  const SIN_CLOSER = "__sin_closer__";
+
   const map = new Map<string, CloserSales>();
-  for (const c of (data ?? []) as Array<{ amount: number; enrollments: { closer_id: string | null; closer_name: string | null; status: string | null } | null }>) {
+  for (const c of (data ?? []) as Array<{ amount: number; enrollments: { closer_id: string | null; closer_name: string | null; status: string | null; deleted_at: string | null } | null }>) {
     const enr = c.enrollments;
-    if (!enr?.closer_name) continue;
-    if (enr.status === "cancelada") continue;
+    if (!enr || enr.status === "cancelada" || enr.deleted_at !== null) continue;
     if (closerId && enr.closer_id !== closerId) continue;
 
-    const key = enr.closer_id ?? enr.closer_name;
+    const key  = enr.closer_id ?? (enr.closer_name ?? SIN_CLOSER);
+    const name = enr.closer_name ?? "Sin closer asignado";
     const existing = map.get(key);
     if (existing) {
       existing.count += 1;
       existing.total += c.amount ?? 0;
     } else {
-      map.set(key, { closer_id: enr.closer_id, closer_name: enr.closer_name, count: 1, total: c.amount ?? 0 });
+      map.set(key, { closer_id: enr.closer_id, closer_name: name, count: 1, total: c.amount ?? 0 });
     }
   }
 
-  return [...map.values()].sort((a, b) => b.total - a.total);
+  return [...map.values()].sort((a, b) => {
+    if (a.closer_name === "Sin closer asignado") return 1;
+    if (b.closer_name === "Sin closer asignado") return -1;
+    return b.total - a.total;
+  });
 }
 
 export async function getExpiringEnrollments(tutorId?: string): Promise<ExpiringEnrollment[]> {
