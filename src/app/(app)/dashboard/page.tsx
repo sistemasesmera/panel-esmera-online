@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { GraduationCap, BookMarked, Clock, FileCheck, Banknote, BookOpen, AlertTriangle, TrendingUp, Receipt } from "lucide-react";
 import Link from "next/link";
 import { requireAuth } from "@/lib/auth/require-role";
-import { getDashboardStats, getExpiringEnrollments, getCloserSalesThisMonth, getRevenueByCourse, getCloserSalesForMonth, type ExpiringEnrollment, type CloserSales, type CourseRevenue } from "@/lib/data/dashboard.repository";
+import { getDashboardStats, getExpiringEnrollments, getCloserSalesThisMonth, getRevenueByCourse, getRevenueByFormation, getCloserSalesForMonth, type ExpiringEnrollment, type CloserSales, type CourseRevenue, type FormationRevenue } from "@/lib/data/dashboard.repository";
 import { ROLE_LABELS } from "@/lib/domain/shared/permissions";
 import { fmt, formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
@@ -53,11 +53,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const showCloserSales = user.role === "administracion" || user.role === "closer";
   const showBilling     = user.role === "administracion";
 
-  const [stats, expiring, closerSales, revenueByCourse, revenueByCloser] = await Promise.all([
+  const [stats, expiring, closerSales, revenueByCourse, revenueByFormation, revenueByCloser] = await Promise.all([
     getDashboardStats(),
     showExpiring    ? getExpiringEnrollments(user.role === "tutor" ? user.id : undefined) : Promise.resolve([]),
     showCloserSales ? getCloserSalesThisMonth(user.role === "closer" ? user.id : undefined) : Promise.resolve([]),
     showBilling     ? getRevenueByCourse(billingYear, billingMonth) : Promise.resolve([]),
+    showBilling     ? getRevenueByFormation(billingYear, billingMonth) : Promise.resolve([]),
     showBilling     ? getCloserSalesForMonth(billingYear, billingMonth) : Promise.resolve([]),
   ]);
   const firstName = user.fullName.split(" ")[0];
@@ -220,12 +221,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             <MonthSelector year={billingYear} month={billingMonth} />
           </div>
 
-          {revenueByCourse.length === 0 && revenueByCloser.length === 0 ? (
+          {revenueByCourse.length === 0 && revenueByFormation.length === 0 && revenueByCloser.length === 0 ? (
             <p className="text-sm text-slate-400 text-center py-8 bg-white rounded-2xl border border-slate-200/80">
               Sin contratos firmados este mes.
             </p>
           ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
               {/* Por curso */}
               <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden card-shadow">
                 <p className="px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 bg-slate-50/80">
@@ -264,6 +265,50 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                           </span>
                         </td>
                         <td className="px-5 py-2.5 text-right font-black text-slate-900 text-xs">{fmt(revenueByCourse.reduce((s, r) => s + r.total, 0))}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                )}
+              </div>
+
+              {/* Por formación */}
+              <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden card-shadow">
+                <p className="px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 bg-slate-50/80">
+                  Por formación
+                </p>
+                {revenueByFormation.length === 0 ? (
+                  <p className="px-5 py-6 text-sm text-slate-400 text-center">Sin datos.</p>
+                ) : (
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-100">
+                        <th className="text-left px-5 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Formación</th>
+                        <th className="text-right px-5 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Contratos</th>
+                        <th className="text-right px-5 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {(revenueByFormation as FormationRevenue[]).map(row => (
+                        <tr key={row.formation_id ?? row.formation_name} className="hover:bg-slate-50 transition-colors">
+                          <td className="px-5 py-3 font-medium text-slate-800 text-xs">{row.formation_name}</td>
+                          <td className="px-5 py-3 text-right">
+                            <span className="inline-flex items-center justify-center h-5 min-w-[1.5rem] px-1.5 rounded-full bg-teal-50 text-teal-700 text-[11px] font-bold">
+                              {row.count}
+                            </span>
+                          </td>
+                          <td className="px-5 py-3 text-right font-bold text-slate-900 text-xs">{fmt(row.total)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="border-t border-slate-200 bg-slate-50/80">
+                        <td className="px-5 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Total</td>
+                        <td className="px-5 py-2.5 text-right">
+                          <span className="inline-flex items-center justify-center h-5 min-w-[1.5rem] px-1.5 rounded-full bg-teal-50 text-teal-700 text-[11px] font-bold">
+                            {revenueByFormation.reduce((s, r) => s + r.count, 0)}
+                          </span>
+                        </td>
+                        <td className="px-5 py-2.5 text-right font-black text-slate-900 text-xs">{fmt(revenueByFormation.reduce((s, r) => s + r.total, 0))}</td>
                       </tr>
                     </tfoot>
                   </table>

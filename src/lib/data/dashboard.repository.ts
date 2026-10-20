@@ -156,6 +156,67 @@ export async function getRevenueByCourse(year: number, month: number): Promise<C
     .sort((a, b) => b.total - a.total);
 }
 
+export type FormationRevenue = {
+  formation_id: string | null;
+  formation_name: string;
+  count: number;
+  total: number;
+};
+
+export async function getRevenueByFormation(year: number, month: number): Promise<FormationRevenue[]> {
+  const db = createAdminClient() as any;
+  const monthStart = new Date(year, month - 1, 1).toISOString();
+  const monthEnd   = new Date(year, month,     1).toISOString();
+
+  const { data, error } = await db
+    .from("contracts")
+    .select("amount, enrollments!enrollment_id(course_id, status, deleted_at)")
+    .eq("status", "firmado")
+    .gte("signed_at", monthStart)
+    .lt("signed_at", monthEnd);
+
+  if (error) throw new Error(error.message);
+
+  // Acumular por course_id filtrando matrículas inválidas
+  const courseMap = new Map<string, { count: number; total: number }>();
+  for (const c of (data ?? []) as Array<{ amount: number; enrollments: { course_id: string | null; status: string; deleted_at: string | null } | null }>) {
+    const enr = c.enrollments;
+    if (!enr || enr.deleted_at !== null || enr.status === "cancelada") continue;
+    const key = enr.course_id ?? "__sin_curso__";
+    const existing = courseMap.get(key);
+    if (existing) { existing.count++; existing.total += c.amount ?? 0; }
+    else           { courseMap.set(key, { count: 1, total: c.amount ?? 0 }); }
+  }
+
+  if (courseMap.size === 0) return [];
+
+  // Resolver formación para cada course_id
+  const courseIds = [...courseMap.keys()].filter(k => k !== "__sin_curso__");
+  const { data: fcData } = courseIds.length
+    ? await db.from("formation_courses").select("course_id, formations(id, name)").in("course_id", courseIds)
+    : { data: [] };
+
+  const courseToFormation = new Map<string, { id: string; name: string }>();
+  for (const fc of (fcData ?? []) as Array<{ course_id: string; formations: { id: string; name: string } | null }>) {
+    if (fc.formations && !courseToFormation.has(fc.course_id)) {
+      courseToFormation.set(fc.course_id, fc.formations);
+    }
+  }
+
+  // Agrupar por formación
+  const formMap = new Map<string, FormationRevenue>();
+  for (const [courseId, { count, total }] of courseMap.entries()) {
+    const formation = courseId === "__sin_curso__" ? null : courseToFormation.get(courseId);
+    const key  = formation?.id  ?? "__sin_formacion__";
+    const name = formation?.name ?? "Sin formación";
+    const existing = formMap.get(key);
+    if (existing) { existing.count += count; existing.total += total; }
+    else           { formMap.set(key, { formation_id: formation?.id ?? null, formation_name: name, count, total }); }
+  }
+
+  return [...formMap.values()].sort((a, b) => b.total - a.total);
+}
+
 export async function getCloserSalesForMonth(year: number, month: number, closerId?: string): Promise<CloserSales[]> {
   const db = createAdminClient() as any;
   const monthStart = new Date(year, month - 1, 1).toISOString();
