@@ -575,6 +575,7 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser }: Pro
   const [filterStageId, setFilterStageId] = useState("");
   const [filterCurso,   setFilterCurso]   = useState("");
   const [filterMember,  setFilterMember]  = useState("");
+  const [filterOrigen,  setFilterOrigen]  = useState("");
 
   // Búsqueda GHL en tiempo real (debounce 400ms)
   const [searchLoading, setSearchLoading] = useState(false);
@@ -831,11 +832,13 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser }: Pro
     ...visibleOpps.map(o => o.setter_name).filter(Boolean) as string[],
     ...visibleOpps.map(o => o.closer_name).filter(Boolean) as string[],
   ])].sort();
+  const origenOptions = [...new Set(visibleOpps.map(o => o.origenLead).filter(Boolean) as string[])].sort();
 
   const filteredOpps = visibleOpps.filter(o => {
     if (filterStageId && o.pipelineStageId !== filterStageId) return false;
     if (filterCurso   && o.cursoValue !== filterCurso)        return false;
     if (filterMember  && o.setter_name !== filterMember && o.closer_name !== filterMember) return false;
+    if (filterOrigen  && o.origenLead !== filterOrigen)       return false;
     if (filterSearch) {
       const q = filterSearch.toLowerCase();
       const nameMatch  = o.contact.name?.toLowerCase().includes(q);
@@ -845,7 +848,7 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser }: Pro
     return true;
   });
 
-  const hasFilters = !!(filterStageId || filterCurso || filterMember || filterSearch);
+  const hasFilters = !!(filterStageId || filterCurso || filterMember || filterOrigen || filterSearch);
 
   // Phase → stages mapping
   const stagesByPhase = PHASES.map(phase => ({
@@ -872,6 +875,7 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser }: Pro
     if (filterStageId && o.pipelineStageId !== filterStageId) return false;
     if (filterCurso   && o.cursoValue !== filterCurso)        return false;
     if (filterMember  && o.setter_name !== filterMember && o.closer_name !== filterMember) return false;
+    if (filterOrigen  && o.origenLead !== filterOrigen)       return false;
     if (filterSearch) {
       const q = filterSearch.toLowerCase();
       const nameMatch  = o.contact.name?.toLowerCase().includes(q);
@@ -948,6 +952,20 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser }: Pro
           )}
         </div>
 
+        {/* Filtro origen — visible en kanban y lista */}
+        {origenOptions.length > 0 && (
+          <select
+            value={filterOrigen}
+            onChange={e => setFilterOrigen(e.target.value)}
+            className="text-xs border border-slate-200 rounded-xl px-3 py-2 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+          >
+            <option value="">Todos los orígenes</option>
+            {origenOptions.map(o => (
+              <option key={o} value={o}>{o}</option>
+            ))}
+          </select>
+        )}
+
         {view === "list" && (
           <div className="flex items-center gap-2 flex-wrap">
             <select
@@ -982,7 +1000,7 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser }: Pro
             </select>
             {hasFilters && (
               <button
-                onClick={() => { setFilterStageId(""); setFilterCurso(""); setFilterMember(""); }}
+                onClick={() => { setFilterStageId(""); setFilterCurso(""); setFilterMember(""); setFilterOrigen(""); }}
                 className="cursor-pointer text-xs font-semibold text-slate-400 hover:text-slate-600 px-2 py-2 rounded-xl hover:bg-slate-100 transition-colors"
               >
                 Limpiar
