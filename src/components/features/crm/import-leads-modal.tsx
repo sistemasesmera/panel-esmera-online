@@ -4,58 +4,33 @@ import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { AlertCircle, CheckCircle2, FileText, Upload, X } from "lucide-react";
 import { importLeadsFromCsv, type ImportRow, type ImportResult } from "@/app/(app)/crm/pipeline/actions";
+import * as XLSX from "xlsx";
 
 type Phase = "idle" | "preview" | "importing" | "done";
 
-function parseCsv(text: string): ImportRow[] {
-  const clean = text.replace(/^﻿/, "");
-  const lines = clean.split(/\r?\n/).filter(Boolean);
-  if (lines.length < 2) return [];
+function parseWorkbook(wb: XLSX.WorkBook): ImportRow[] {
+  const sheet = wb.Sheets[wb.SheetNames[0]];
+  const raw = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
+  if (!raw.length) return [];
 
-  function parseLine(line: string): string[] {
-    const fields: string[] = [];
-    let i = 0;
-    while (i < line.length) {
-      if (line[i] === '"') {
-        let val = "";
-        i++;
-        while (i < line.length) {
-          if (line[i] === '"' && line[i + 1] === '"') { val += '"'; i += 2; }
-          else if (line[i] === '"') { i++; break; }
-          else { val += line[i++]; }
-        }
-        if (i < line.length && line[i] === ",") i++;
-        fields.push(val);
-      } else {
-        const end = line.indexOf(",", i);
-        if (end === -1) { fields.push(line.slice(i)); break; }
-        fields.push(line.slice(i, end));
-        i = end + 1;
-      }
-    }
-    return fields;
-  }
+  const norm = (s: unknown) => String(s ?? "").trim().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  const keys = Object.keys(raw[0]);
+  const kNombre = keys.find(k => norm(k).includes("nombre"));
+  const kEmail  = keys.find(k => norm(k).includes("email"));
+  const kTel    = keys.find(k => norm(k).includes("tel"));
+  const kOrigen = keys.find(k => norm(k).includes("origen"));
+  const kCurso  = keys.find(k => norm(k).includes("curso"));
 
-  const headers = parseLine(lines[0]).map(h => h.trim().toLowerCase());
-  const iNombre = headers.findIndex(h => h.includes("nombre"));
-  const iEmail  = headers.findIndex(h => h.includes("email"));
-  const iTel    = headers.findIndex(h => h.includes("tel"));
-  const iOrigen = headers.findIndex(h => h.includes("origen"));
-  const iCurso  = headers.findIndex(h => h.includes("curso"));
+  if (!kNombre) return [];
 
-  if (iNombre === -1) return [];
-
-  return lines.slice(1)
-    .map(line => {
-      const cols = parseLine(line);
-      return {
-        nombre:   (cols[iNombre]  ?? "").trim(),
-        email:    (cols[iEmail]   ?? "").trim(),
-        telefono: (cols[iTel]     ?? "").trim(),
-        origen:   (cols[iOrigen]  ?? "").trim(),
-        curso:    (cols[iCurso]   ?? "").trim(),
-      };
-    })
+  return raw
+    .map(r => ({
+      nombre:   String(r[kNombre]  ?? "").trim(),
+      email:    String(kEmail  ? r[kEmail]  : "").trim(),
+      telefono: String(kTel    ? r[kTel]    : "").trim(),
+      origen:   String(kOrigen ? r[kOrigen] : "").trim(),
+      curso:    String(kCurso  ? r[kCurso]  : "").trim(),
+    }))
     .filter(r => r.nombre);
 }
 
@@ -78,16 +53,17 @@ export function ImportLeadsModal({
   function handleFile(file: File) {
     const reader = new FileReader();
     reader.onload = e => {
-      const text = e.target?.result as string;
-      const parsed = parseCsv(text);
+      const buf = e.target?.result as ArrayBuffer;
+      const wb = XLSX.read(buf, { type: "array" });
+      const parsed = parseWorkbook(wb);
       if (!parsed.length) {
-        alert("No se encontraron filas válidas. Revisa que el CSV tenga las columnas: Nombre completo, Email, Teléfono, Origen, Curso.");
+        alert("No se encontraron filas válidas. Revisa que el archivo tenga las columnas: Nombre completo, Email, Teléfono, Origen, Curso.");
         return;
       }
       setRows(parsed);
       setPhase("preview");
     };
-    reader.readAsText(file, "utf-8");
+    reader.readAsArrayBuffer(file);
   }
 
   function handleDrop(e: React.DragEvent) {
@@ -112,7 +88,7 @@ export function ImportLeadsModal({
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b">
-          <h2 className="text-base font-bold text-slate-800">Importar leads desde CSV</h2>
+          <h2 className="text-base font-bold text-slate-800">Importar leads desde Excel o CSV</h2>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors">
             <X className="h-5 w-5" />
           </button>
@@ -129,12 +105,12 @@ export function ImportLeadsModal({
               className="border-2 border-dashed border-slate-200 rounded-xl p-10 flex flex-col items-center gap-3 cursor-pointer hover:border-indigo-400 hover:bg-indigo-50/40 transition-colors"
             >
               <Upload className="h-8 w-8 text-slate-400" />
-              <p className="text-sm font-semibold text-slate-700">Arrastra el CSV o haz clic para seleccionarlo</p>
-              <p className="text-xs text-slate-400">Columnas esperadas: Nombre completo · Email · Teléfono · Origen · Curso</p>
+              <p className="text-sm font-semibold text-slate-700">Arrastra el archivo o haz clic para seleccionarlo</p>
+              <p className="text-xs text-slate-400">Formatos: .xlsx · .csv — Columnas: Nombre completo · Email · Teléfono · Origen · Curso</p>
               <input
                 ref={fileRef}
                 type="file"
-                accept=".csv,text/csv"
+                accept=".xlsx,.xls,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 className="hidden"
                 onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
               />
@@ -146,7 +122,7 @@ export function ImportLeadsModal({
             <div className="flex flex-col gap-4">
               <div className="flex items-center gap-2 text-sm text-slate-600">
                 <FileText className="h-4 w-4 text-indigo-500" />
-                <span><strong>{rows.length}</strong> leads listos para importar en la etapa <strong>Cualificado</strong></span>
+                <span><strong>{rows.length}</strong> leads listos para importar en la etapa <strong>Contactando</strong></span>
               </div>
               <div className="overflow-x-auto rounded-xl border border-slate-100">
                 <table className="w-full text-xs">

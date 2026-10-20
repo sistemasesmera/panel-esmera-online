@@ -1267,7 +1267,7 @@ export function PipelineKanban({ pipelines, formQuestionDefs, currentUser }: Pro
 
       {importOpen && pipeline && (() => {
         const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
-        const cualificandoStage = pipeline.stages.find(s => norm(s.name).includes("cualificando"))
+        const cualificandoStage = pipeline.stages.find(s => norm(s.name).includes("contactando"))
           ?? pipeline.stages[0];
         return (
           <ImportLeadsModal
