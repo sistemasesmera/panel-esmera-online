@@ -168,50 +168,70 @@ export async function getRevenueByFormation(year: number, month: number): Promis
   const monthStart = new Date(year, month - 1, 1).toISOString();
   const monthEnd   = new Date(year, month,     1).toISOString();
 
+  // Leemos formation_id Y course_id del enrollment
   const { data, error } = await db
     .from("contracts")
-    .select("amount, enrollments!enrollment_id(course_id, status, deleted_at)")
+    .select("amount, enrollments!enrollment_id(course_id, formation_id, status, deleted_at)")
     .eq("status", "firmado")
     .gte("signed_at", monthStart)
     .lt("signed_at", monthEnd);
 
   if (error) throw new Error(error.message);
 
-  // Acumular por course_id filtrando matrículas inválidas
-  const courseMap = new Map<string, { count: number; total: number }>();
-  for (const c of (data ?? []) as Array<{ amount: number; enrollments: { course_id: string | null; status: string; deleted_at: string | null } | null }>) {
+  type EnrRow = { course_id: string | null; formation_id: string | null; status: string; deleted_at: string | null };
+  // formation_id directos (tab "Formación") y course_id indirectos (tab "Curso individual")
+  const directMap = new Map<string, { count: number; total: number }>(); // formation_id → totales
+  const courseMap = new Map<string, { count: number; total: number }>(); // course_id → totales (para resolver vía formation_courses)
+  let sinCount = 0; let sinTotal = 0;
+
+  for (const c of (data ?? []) as Array<{ amount: number; enrollments: EnrRow | null }>) {
     const enr = c.enrollments;
     if (!enr || enr.deleted_at !== null || enr.status === "cancelada") continue;
-    const key = enr.course_id ?? "__sin_curso__";
-    const existing = courseMap.get(key);
-    if (existing) { existing.count++; existing.total += c.amount ?? 0; }
-    else           { courseMap.set(key, { count: 1, total: c.amount ?? 0 }); }
-  }
-
-  if (courseMap.size === 0) return [];
-
-  // Resolver formación para cada course_id
-  const courseIds = [...courseMap.keys()].filter(k => k !== "__sin_curso__");
-  const { data: fcData } = courseIds.length
-    ? await db.from("formation_courses").select("course_id, formations(id, name)").in("course_id", courseIds)
-    : { data: [] };
-
-  const courseToFormation = new Map<string, { id: string; name: string }>();
-  for (const fc of (fcData ?? []) as Array<{ course_id: string; formations: { id: string; name: string } | null }>) {
-    if (fc.formations && !courseToFormation.has(fc.course_id)) {
-      courseToFormation.set(fc.course_id, fc.formations);
+    const amt = c.amount ?? 0;
+    if (enr.formation_id) {
+      const ex = directMap.get(enr.formation_id);
+      if (ex) { ex.count++; ex.total += amt; } else directMap.set(enr.formation_id, { count: 1, total: amt });
+    } else if (enr.course_id) {
+      const ex = courseMap.get(enr.course_id);
+      if (ex) { ex.count++; ex.total += amt; } else courseMap.set(enr.course_id, { count: 1, total: amt });
+    } else {
+      sinCount++; sinTotal += amt;
     }
   }
 
-  // Agrupar por formación
   const formMap = new Map<string, FormationRevenue>();
-  for (const [courseId, { count, total }] of courseMap.entries()) {
-    const formation = courseId === "__sin_curso__" ? null : courseToFormation.get(courseId);
-    const key  = formation?.id  ?? "__sin_formacion__";
-    const name = formation?.name ?? "Sin formación";
-    const existing = formMap.get(key);
-    if (existing) { existing.count += count; existing.total += total; }
-    else           { formMap.set(key, { formation_id: formation?.id ?? null, formation_name: name, count, total }); }
+
+  // Resolver nombres para formation_id directos
+  const directIds = [...directMap.keys()];
+  if (directIds.length > 0) {
+    const { data: fData } = await db.from("formations").select("id, name").in("id", directIds);
+    const nameMap = new Map<string, string>(((fData ?? []) as Array<{ id: string; name: string }>).map(f => [f.id, f.name]));
+    for (const [fid, { count, total }] of directMap.entries()) {
+      formMap.set(fid, { formation_id: fid, formation_name: nameMap.get(fid) ?? "Sin formación", count, total });
+    }
+  }
+
+  // Resolver course_id → formación vía formation_courses
+  const courseIds = [...courseMap.keys()];
+  if (courseIds.length > 0) {
+    const { data: fcData } = await db.from("formation_courses").select("course_id, formations(id, name)").in("course_id", courseIds);
+    const courseToForm = new Map<string, { id: string; name: string }>();
+    for (const fc of (fcData ?? []) as Array<{ course_id: string; formations: { id: string; name: string } | null }>) {
+      if (fc.formations && !courseToForm.has(fc.course_id)) courseToForm.set(fc.course_id, fc.formations);
+    }
+    for (const [cid, { count, total }] of courseMap.entries()) {
+      const f = courseToForm.get(cid);
+      const key = f?.id ?? "__sin_formacion__";
+      const ex = formMap.get(key);
+      if (ex) { ex.count += count; ex.total += total; }
+      else formMap.set(key, { formation_id: f?.id ?? null, formation_name: f?.name ?? "Sin formación", count, total });
+    }
+  }
+
+  if (sinCount > 0) {
+    const ex = formMap.get("__sin_formacion__");
+    if (ex) { ex.count += sinCount; ex.total += sinTotal; }
+    else formMap.set("__sin_formacion__", { formation_id: null, formation_name: "Sin formación", count: sinCount, total: sinTotal });
   }
 
   return [...formMap.values()].sort((a, b) => b.total - a.total);
