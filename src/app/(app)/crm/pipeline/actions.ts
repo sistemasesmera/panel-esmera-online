@@ -777,6 +777,19 @@ export async function importLeadsFromCsv(
   const cursoFieldId  = process.env.GHL_CURSO_FIELD_ID        ?? null;
   const origenFieldId = process.env.GHL_ORIGEN_LEAD_FIELD_ID  ?? null;
 
+  // Resolver setter fijo: Wendy
+  const SETTER_EMAIL = "wendy.florez@esmeraonline.com";
+  let wendySetter: { id: string; name: string } | null = null;
+  try {
+    const { data: { users: authUsers } } = await (createAdminClient() as any).auth.admin.listUsers({ perPage: 200 });
+    const wendyAuth = (authUsers as Array<{ id: string; email?: string }>)
+      .find(u => u.email === SETTER_EMAIL);
+    if (wendyAuth) {
+      const { data: profile } = await db.from("users").select("full_name").eq("id", wendyAuth.id).maybeSingle();
+      wendySetter = { id: wendyAuth.id, name: profile?.full_name ?? "Wendy Florez" };
+    }
+  } catch { /* non-blocking — importa aunque no resuelva a Wendy */ }
+
   // Deduplicar dentro del propio CSV por teléfono normalizado
   const seenPhones = new Set<string>();
   const deduped: ImportRow[] = [];
@@ -825,7 +838,12 @@ export async function importLeadsFromCsv(
       });
 
       await db.from("lead_profiles").upsert(
-        { ghl_contact_id: contact.id, origen: row.origen?.trim() || null, curso_interes: row.curso?.trim() || null },
+        {
+          ghl_contact_id: contact.id,
+          origen:         row.origen?.trim() || null,
+          curso_interes:  row.curso?.trim()  || null,
+          ...(wendySetter ? { setter_id: wendySetter.id, setter_name: wendySetter.name } : {}),
+        },
         { onConflict: "ghl_contact_id" },
       );
 
@@ -833,7 +851,12 @@ export async function importLeadsFromCsv(
         ghl_contact_id:     contact.id,
         ghl_opportunity_id: opp.id,
         type:               "nota",
-        content:            `📥 Lead importado desde Esmera Online\nOrigen: ${row.origen || "—"}\nCurso: ${row.curso || "—"}`,
+        content:            [
+          `📥 Lead importado desde Esmera Online`,
+          `Origen: ${row.origen || "—"}`,
+          `Curso: ${row.curso || "—"}`,
+          wendySetter ? `👤 Setter asignado: ${wendySetter.name}` : null,
+        ].filter(Boolean).join("\n"),
         created_by:         user.id,
         created_by_name:    user.fullName ?? user.email ?? "Sistema",
       });
