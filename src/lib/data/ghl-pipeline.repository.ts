@@ -149,7 +149,9 @@ export async function getEnrichedOppsFromCache(
   return enrichOpps(opps, pipeline, currentUser);
 }
 
-// Leads de una etapa concreta — 20 por página para carga por columna
+// Leads de una etapa concreta — 20 por página para carga por columna.
+// Si tras filtrar por rol la página queda vacía y hay más páginas, sigue
+// cargando hasta encontrar resultados o agotar las páginas (máx 10 extra).
 export async function fetchStageLeads(
   pipelineId:  string,
   stageId:     string,
@@ -157,11 +159,29 @@ export async function fetchStageLeads(
   currentUser: PipelineUser,
   page:        number,
 ): Promise<{ opps: OppEnriched[]; total: number | null; nextPage: number | null }> {
-  const { opps: raw, total, nextPage } = await fetchGhlOpportunitiesPage(
-    pipelineId, page, { stageId, limit: 20 },
-  );
-  const opps = await enrichOpps(raw, pipeline, currentUser);
-  return { opps, total, nextPage };
+  let currentPage = page;
+  let total: number | null = null;
+  let nextPage: number | null = null;
+  const accumulated: OppEnriched[] = [];
+  const MAX_EXTRA_PAGES = 10;
+
+  for (let attempt = 0; attempt <= MAX_EXTRA_PAGES; attempt++) {
+    const result = await fetchGhlOpportunitiesPage(
+      pipelineId, currentPage, { stageId, limit: 20 },
+    );
+    total    = result.total;
+    nextPage = result.nextPage;
+
+    const enriched = await enrichOpps(result.opps, pipeline, currentUser);
+    accumulated.push(...enriched);
+
+    // Parar si ya tenemos resultados, no hay más páginas, o es admin (no filtra)
+    if (accumulated.length > 0 || result.nextPage === null || currentUser.role === "administracion") break;
+
+    currentPage = result.nextPage;
+  }
+
+  return { opps: accumulated, total, nextPage };
 }
 
 // Primera página (100 leads) — rápido para el servidor. El resto se carga client-side.
