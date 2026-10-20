@@ -102,6 +102,96 @@ export async function getCloserSalesThisMonth(closerId?: string): Promise<Closer
   });
 }
 
+export type CourseRevenue = {
+  course_id: string | null;
+  course_name: string;
+  count: number;
+  total: number;
+};
+
+export async function getRevenueByCourse(year: number, month: number): Promise<CourseRevenue[]> {
+  const db = createAdminClient() as any;
+  const monthStart = new Date(year, month - 1, 1).toISOString();
+  const monthEnd   = new Date(year, month,     1).toISOString();
+
+  const { data, error } = await db
+    .from("contracts")
+    .select("amount, enrollments!enrollment_id(course_id, status, deleted_at)")
+    .eq("status", "firmado")
+    .gte("signed_at", monthStart)
+    .lt("signed_at", monthEnd);
+
+  if (error) throw new Error(error.message);
+
+  // Acumular importes por course_id
+  const courseMap = new Map<string, { count: number; total: number }>();
+  for (const c of (data ?? []) as Array<{ amount: number; enrollments: { course_id: string | null; status: string; deleted_at: string | null } | null }>) {
+    const enr = c.enrollments;
+    if (!enr || enr.deleted_at !== null || enr.status === "cancelada") continue;
+    const key = enr.course_id ?? "__sin_curso__";
+    const existing = courseMap.get(key);
+    if (existing) { existing.count++; existing.total += c.amount ?? 0; }
+    else           { courseMap.set(key, { count: 1, total: c.amount ?? 0 }); }
+  }
+
+  if (courseMap.size === 0) return [];
+
+  // Resolver nombres de curso en una segunda consulta
+  const courseIds = [...courseMap.keys()].filter(k => k !== "__sin_curso__");
+  const { data: coursesData } = courseIds.length
+    ? await db.from("courses").select("id, name").in("id", courseIds)
+    : { data: [] };
+
+  const nameMap = new Map<string, string>(
+    ((coursesData ?? []) as Array<{ id: string; name: string }>).map(c => [c.id, c.name])
+  );
+
+  return [...courseMap.entries()]
+    .map(([key, { count, total }]) => ({
+      course_id:   key === "__sin_curso__" ? null : key,
+      course_name: key === "__sin_curso__" ? "Sin curso" : (nameMap.get(key) ?? "Sin curso"),
+      count,
+      total,
+    }))
+    .sort((a, b) => b.total - a.total);
+}
+
+export async function getCloserSalesForMonth(year: number, month: number, closerId?: string): Promise<CloserSales[]> {
+  const db = createAdminClient() as any;
+  const monthStart = new Date(year, month - 1, 1).toISOString();
+  const monthEnd = new Date(year, month, 1).toISOString();
+
+  const { data, error } = await db
+    .from("contracts")
+    .select("amount, enrollments!enrollment_id(closer_id, closer_name, status, deleted_at)")
+    .eq("status", "firmado")
+    .gte("signed_at", monthStart)
+    .lt("signed_at", monthEnd);
+
+  if (error) throw new Error(error.message);
+
+  const SIN_CLOSER = "__sin_closer__";
+  const map = new Map<string, CloserSales>();
+  for (const c of (data ?? []) as Array<{ amount: number; enrollments: { closer_id: string | null; closer_name: string | null; status: string | null; deleted_at: string | null } | null }>) {
+    const enr = c.enrollments;
+    if (!enr || enr.status === "cancelada" || enr.deleted_at !== null) continue;
+    if (closerId && enr.closer_id !== closerId) continue;
+    const key = enr.closer_id ?? (enr.closer_name ?? SIN_CLOSER);
+    const existing = map.get(key);
+    if (existing) {
+      existing.count += 1;
+      existing.total += c.amount ?? 0;
+    } else {
+      map.set(key, { closer_id: enr.closer_id, closer_name: enr.closer_name ?? "Sin closer asignado", count: 1, total: c.amount ?? 0 });
+    }
+  }
+  return [...map.values()].sort((a, b) => {
+    if (a.closer_name === "Sin closer asignado") return 1;
+    if (b.closer_name === "Sin closer asignado") return -1;
+    return b.total - a.total;
+  });
+}
+
 export async function getExpiringEnrollments(tutorId?: string): Promise<ExpiringEnrollment[]> {
   const db = createAdminClient() as any;
   const today = new Date();

@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
-import { GraduationCap, BookMarked, Clock, FileCheck, Banknote, BookOpen, AlertTriangle, TrendingUp } from "lucide-react";
+import { GraduationCap, BookMarked, Clock, FileCheck, Banknote, BookOpen, AlertTriangle, TrendingUp, Receipt } from "lucide-react";
 import Link from "next/link";
 import { requireAuth } from "@/lib/auth/require-role";
-import { getDashboardStats, getExpiringEnrollments, getCloserSalesThisMonth, type ExpiringEnrollment, type CloserSales } from "@/lib/data/dashboard.repository";
+import { getDashboardStats, getExpiringEnrollments, getCloserSalesThisMonth, getRevenueByCourse, getCloserSalesForMonth, type ExpiringEnrollment, type CloserSales, type CourseRevenue } from "@/lib/data/dashboard.repository";
 import { ROLE_LABELS } from "@/lib/domain/shared/permissions";
 import { fmt, formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
+import { MonthSelector } from "@/components/features/dashboard/month-selector";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
@@ -36,14 +37,28 @@ function KpiCard({ title, value, icon: Icon, accent, bgAccent, sub }: KpiCardPro
   );
 }
 
-export default async function DashboardPage() {
+export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ mes?: string }> }) {
   const user = await requireAuth();
-  const showExpiring     = user.role === "administracion" || user.role === "tutor";
-  const showCloserSales  = user.role === "administracion" || user.role === "closer";
-  const [stats, expiring, closerSales] = await Promise.all([
+  const params = await searchParams;
+
+  const now = new Date();
+  let billingYear  = now.getFullYear();
+  let billingMonth = now.getMonth() + 1;
+  if (params.mes) {
+    const [y, m] = params.mes.split("-").map(Number);
+    if (!isNaN(y) && !isNaN(m) && m >= 1 && m <= 12) { billingYear = y; billingMonth = m; }
+  }
+
+  const showExpiring    = user.role === "administracion" || user.role === "tutor";
+  const showCloserSales = user.role === "administracion" || user.role === "closer";
+  const showBilling     = user.role === "administracion";
+
+  const [stats, expiring, closerSales, revenueByCourse, revenueByCloser] = await Promise.all([
     getDashboardStats(),
-    showExpiring     ? getExpiringEnrollments(user.role === "tutor" ? user.id : undefined) : Promise.resolve([]),
-    showCloserSales  ? getCloserSalesThisMonth(user.role === "closer" ? user.id : undefined) : Promise.resolve([]),
+    showExpiring    ? getExpiringEnrollments(user.role === "tutor" ? user.id : undefined) : Promise.resolve([]),
+    showCloserSales ? getCloserSalesThisMonth(user.role === "closer" ? user.id : undefined) : Promise.resolve([]),
+    showBilling     ? getRevenueByCourse(billingYear, billingMonth) : Promise.resolve([]),
+    showBilling     ? getCloserSalesForMonth(billingYear, billingMonth) : Promise.resolve([]),
   ]);
   const firstName = user.fullName.split(" ")[0];
   const monthName = new Date().toLocaleDateString("es-ES", { month: "long", year: "numeric" });
@@ -189,6 +204,115 @@ export default async function DashboardPage() {
                   </tbody>
                 </table>
               )}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* Billing by month */}
+      {showBilling && (
+        <section>
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+              <Receipt className="h-3.5 w-3.5 text-indigo-500" />
+              Facturación mensual
+            </p>
+            <MonthSelector year={billingYear} month={billingMonth} />
+          </div>
+
+          {revenueByCourse.length === 0 && revenueByCloser.length === 0 ? (
+            <p className="text-sm text-slate-400 text-center py-8 bg-white rounded-2xl border border-slate-200/80">
+              Sin contratos firmados este mes.
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {/* Por curso */}
+              <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden card-shadow">
+                <p className="px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 bg-slate-50/80">
+                  Por curso
+                </p>
+                {revenueByCourse.length === 0 ? (
+                  <p className="px-5 py-6 text-sm text-slate-400 text-center">Sin datos.</p>
+                ) : (
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-100">
+                        <th className="text-left px-5 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Curso</th>
+                        <th className="text-right px-5 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Contratos</th>
+                        <th className="text-right px-5 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {(revenueByCourse as CourseRevenue[]).map(row => (
+                        <tr key={row.course_id ?? row.course_name} className="hover:bg-slate-50 transition-colors">
+                          <td className="px-5 py-3 font-medium text-slate-800 text-xs">{row.course_name}</td>
+                          <td className="px-5 py-3 text-right">
+                            <span className="inline-flex items-center justify-center h-5 min-w-[1.5rem] px-1.5 rounded-full bg-indigo-50 text-indigo-700 text-[11px] font-bold">
+                              {row.count}
+                            </span>
+                          </td>
+                          <td className="px-5 py-3 text-right font-bold text-slate-900 text-xs">{fmt(row.total)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="border-t border-slate-200 bg-slate-50/80">
+                        <td className="px-5 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Total</td>
+                        <td className="px-5 py-2.5 text-right">
+                          <span className="inline-flex items-center justify-center h-5 min-w-[1.5rem] px-1.5 rounded-full bg-indigo-50 text-indigo-700 text-[11px] font-bold">
+                            {revenueByCourse.reduce((s, r) => s + r.count, 0)}
+                          </span>
+                        </td>
+                        <td className="px-5 py-2.5 text-right font-black text-slate-900 text-xs">{fmt(revenueByCourse.reduce((s, r) => s + r.total, 0))}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                )}
+              </div>
+
+              {/* Por closer */}
+              <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden card-shadow">
+                <p className="px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 bg-slate-50/80">
+                  Por closer
+                </p>
+                {revenueByCloser.length === 0 ? (
+                  <p className="px-5 py-6 text-sm text-slate-400 text-center">Sin datos.</p>
+                ) : (
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-100">
+                        <th className="text-left px-5 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Closer</th>
+                        <th className="text-right px-5 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Ventas</th>
+                        <th className="text-right px-5 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {(revenueByCloser as CloserSales[]).map(row => (
+                        <tr key={row.closer_id ?? row.closer_name} className="hover:bg-slate-50 transition-colors">
+                          <td className="px-5 py-3 font-medium text-slate-800 text-xs">{row.closer_name}</td>
+                          <td className="px-5 py-3 text-right">
+                            <span className="inline-flex items-center justify-center h-5 min-w-[1.5rem] px-1.5 rounded-full bg-violet-50 text-violet-700 text-[11px] font-bold">
+                              {row.count}
+                            </span>
+                          </td>
+                          <td className="px-5 py-3 text-right font-bold text-slate-900 text-xs">{fmt(row.total)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="border-t border-slate-200 bg-slate-50/80">
+                        <td className="px-5 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Total</td>
+                        <td className="px-5 py-2.5 text-right">
+                          <span className="inline-flex items-center justify-center h-5 min-w-[1.5rem] px-1.5 rounded-full bg-violet-50 text-violet-700 text-[11px] font-bold">
+                            {revenueByCloser.reduce((s, r) => s + r.count, 0)}
+                          </span>
+                        </td>
+                        <td className="px-5 py-2.5 text-right font-black text-slate-900 text-xs">{fmt(revenueByCloser.reduce((s, r) => s + r.total, 0))}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                )}
+              </div>
             </div>
           )}
         </section>
