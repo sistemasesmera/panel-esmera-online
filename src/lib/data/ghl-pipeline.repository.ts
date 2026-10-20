@@ -106,10 +106,12 @@ async function enrichOpps(
 
   if (currentUser.role === "administracion") return enriched;
 
+  const hasSetterRole = currentUser.role === "setter" || currentUser.role === "setter_closer";
+
   return enriched.filter(o =>
     o.setter_id === currentUser.id ||
     o.closer_id === currentUser.id ||
-    (currentUser.role === "setter" && !o.setter_id && !o.closer_id)
+    (hasSetterRole && !o.setter_id && !o.closer_id)
   );
 }
 
