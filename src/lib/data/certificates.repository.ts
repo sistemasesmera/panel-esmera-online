@@ -1,7 +1,7 @@
 import "server-only";
 import { randomBytes } from "crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { CreateCertificateInput } from "@/lib/domain/certificates/schema";
+import type { CreateCertificateInput, CreateManualCertificateInput } from "@/lib/domain/certificates/schema";
 
 function generateCertNumber(enrollmentNumber: number): string {
   const prefix = randomBytes(3).toString("hex").toUpperCase(); // e.g. "A3F9C2"
@@ -169,6 +169,36 @@ export async function updateCertificateSyllabus(id: string, syllabus: string): P
     .update({ syllabus, updated_at: new Date().toISOString() })
     .eq("id", id);
   if (error) throw new Error(error.message);
+}
+
+export async function createManualCertificate(
+  input: CreateManualCertificateInput,
+  createdBy: string
+): Promise<CertificateRow> {
+  const db = createAdminClient() as any;
+  const suffix = Math.floor(10000 + Math.random() * 90000);
+  const certificateNumber = generateCertNumber(suffix);
+
+  const { data, error } = await db
+    .from("certificates")
+    .insert({
+      enrollment_id:      null,
+      certificate_number: certificateNumber,
+      student_name:       input.student_name,
+      course_name:        input.course_name,
+      hours:              input.hours ?? null,
+      start_date:         input.start_date ?? null,
+      end_date:           input.end_date ?? null,
+      active:             true,
+      status:             "emitido",
+      issued_at:          new Date().toISOString(),
+      created_by:         createdBy,
+    })
+    .select(CERT_SELECT)
+    .single();
+
+  if (error) throw new Error(error.message);
+  return data as CertificateRow;
 }
 
 export async function deactivateCertificate(id: string): Promise<void> {

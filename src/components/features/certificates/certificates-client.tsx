@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import type { CertificateRow, EnrollmentPreview } from "@/lib/data/certificates.repository";
 import {
   createCertificateAction,
+  createManualCertificateAction,
   deactivateCertificateAction,
   searchEnrollmentsAction,
   updateSyllabusAction,
@@ -164,6 +165,8 @@ function EnrollmentSearch({ onSelect }: { onSelect: (e: EnrollmentPreview) => vo
 
 // ── Create drawer ───────────────────────────────────────────────────────────
 
+type CreateTab = "matricula" | "manual";
+
 function CreateDrawer({
   open, onClose, onCreated,
 }: {
@@ -171,6 +174,7 @@ function CreateDrawer({
   onClose: () => void;
   onCreated: (cert: CertificateRow) => void;
 }) {
+  const [tab,         setTab]         = useState<CreateTab>("matricula");
   const [preview,     setPreview]     = useState<EnrollmentPreview | null>(null);
   const [studentName, setStudentName] = useState("");
   const [courseName,  setCourseName]  = useState("");
@@ -178,6 +182,12 @@ function CreateDrawer({
   const [startDate,   setStartDate]   = useState("");
   const [endDate,     setEndDate]     = useState("");
   const [isPending,   startTransition] = useTransition();
+
+  function resetFields() {
+    setPreview(null);
+    setStudentName(""); setCourseName(""); setHours("");
+    setStartDate(""); setEndDate("");
+  }
 
   function handleSelect(e: EnrollmentPreview) {
     setPreview(e);
@@ -188,25 +198,40 @@ function CreateDrawer({
     setEndDate(e.end_date ?? "");
   }
 
+  function handleTabChange(t: CreateTab) {
+    setTab(t);
+    resetFields();
+  }
+
   function handleClose() {
-    setPreview(null);
-    setStudentName(""); setCourseName(""); setHours("");
-    setStartDate(""); setEndDate("");
+    resetFields();
+    setTab("matricula");
     onClose();
   }
 
   function handleSubmit() {
-    if (!preview) return;
     startTransition(async () => {
       try {
-        const cert = await createCertificateAction({
-          enrollment_id: preview.id,
-          student_name:  studentName,
-          course_name:   courseName,
-          hours:         hours ? Number(hours) : null,
-          start_date:    startDate || null,
-          end_date:      endDate || null,
-        });
+        let cert: CertificateRow;
+        if (tab === "matricula") {
+          if (!preview) return;
+          cert = await createCertificateAction({
+            enrollment_id: preview.id,
+            student_name:  studentName,
+            course_name:   courseName,
+            hours:         hours ? Number(hours) : null,
+            start_date:    startDate || null,
+            end_date:      endDate || null,
+          });
+        } else {
+          cert = await createManualCertificateAction({
+            student_name: studentName,
+            course_name:  courseName,
+            hours:        hours ? Number(hours) : null,
+            start_date:   startDate || null,
+            end_date:     endDate || null,
+          });
+        }
         toast.success(`Certificado Nº ${cert.certificate_number} generado`);
         onCreated(cert);
         handleClose();
@@ -218,66 +243,142 @@ function CreateDrawer({
 
   const certNumber = preview ? `??????-${preview.enrollment_number}` : null;
   const qrUrl      = certNumber ? `${QR_BASE}/${certNumber}` : null;
+  const canSubmit  = tab === "matricula"
+    ? !!preview && !!studentName.trim() && !!courseName.trim()
+    : !!studentName.trim() && !!courseName.trim();
 
   return (
     <Drawer open={open} onClose={handleClose} title="Nuevo certificado" icon={Award}>
-      {/* Búsqueda de matrícula */}
-      <div>
-        <label className={labelCls}>Matrícula</label>
-        <EnrollmentSearch onSelect={handleSelect} />
+
+      {/* Pestañas */}
+      <div className="flex rounded-xl border border-slate-200 overflow-hidden text-sm font-semibold">
+        <button
+          type="button"
+          onClick={() => handleTabChange("matricula")}
+          className={cn(
+            "flex-1 py-2 transition-colors",
+            tab === "matricula"
+              ? "bg-indigo-600 text-white"
+              : "bg-white text-slate-500 hover:bg-slate-50"
+          )}
+        >
+          Por matrícula
+        </button>
+        <button
+          type="button"
+          onClick={() => handleTabChange("manual")}
+          className={cn(
+            "flex-1 py-2 transition-colors border-l border-slate-200",
+            tab === "manual"
+              ? "bg-indigo-600 text-white"
+              : "bg-white text-slate-500 hover:bg-slate-50"
+          )}
+        >
+          Manual
+        </button>
       </div>
 
-      {preview && (
+      {/* Tab: Por matrícula */}
+      {tab === "matricula" && (
         <>
-          {/* Datos editables */}
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-4">
-            <div>
-              <label className={labelCls}>Nombre del alumno</label>
-              <input className={inputCls} value={studentName} onChange={e => setStudentName(e.target.value)} />
-            </div>
-            <div>
-              <label className={labelCls}>Curso</label>
-              <input className={inputCls} value={courseName} onChange={e => setCourseName(e.target.value)} />
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <label className={labelCls}>Horas</label>
-                <input type="number" className={inputCls} value={hours} onChange={e => setHours(e.target.value)} />
-              </div>
-              <div>
-                <label className={labelCls}>Inicio</label>
-                <input type="date" className={inputCls} value={startDate} onChange={e => setStartDate(e.target.value)} />
-              </div>
-              <div>
-                <label className={labelCls}>Fin</label>
-                <input type="date" className={inputCls} value={endDate} onChange={e => setEndDate(e.target.value)} />
-              </div>
-            </div>
+          <div>
+            <label className={labelCls}>Matrícula</label>
+            <EnrollmentSearch onSelect={handleSelect} />
           </div>
 
-          {/* QR preview */}
-          <div className="rounded-xl border border-slate-200 bg-white p-5 flex flex-col items-center gap-3">
-            <p className={labelCls}>Vista previa del QR</p>
-            <QRCode value={qrUrl!} size={150} />
-            <p className="text-[11px] text-slate-400 text-center break-all">{qrUrl}</p>
-            <span className="text-xs font-mono font-semibold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-lg">
-              Nº {certNumber}
-            </span>
-            <p className="text-[10px] text-slate-400 text-center">El código aleatorio se genera al guardar</p>
-          </div>
+          {preview && (
+            <>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-4">
+                <div>
+                  <label className={labelCls}>Nombre del alumno</label>
+                  <input className={inputCls} value={studentName} onChange={e => setStudentName(e.target.value)} />
+                </div>
+                <div>
+                  <label className={labelCls}>Curso</label>
+                  <input className={inputCls} value={courseName} onChange={e => setCourseName(e.target.value)} />
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className={labelCls}>Horas</label>
+                    <input type="number" className={inputCls} value={hours} onChange={e => setHours(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Inicio</label>
+                    <input type="date" className={inputCls} value={startDate} onChange={e => setStartDate(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Fin</label>
+                    <input type="date" className={inputCls} value={endDate} onChange={e => setEndDate(e.target.value)} />
+                  </div>
+                </div>
+              </div>
 
-          <button
-            onClick={handleSubmit}
-            disabled={isPending || !studentName.trim() || !courseName.trim()}
-            className={btnPrimary}
-          >
-            {isPending
-              ? <><Loader2 className="h-4 w-4 animate-spin" /> Generando...</>
-              : <><Award className="h-4 w-4" /> Generar certificado</>
-            }
-          </button>
+              <div className="rounded-xl border border-slate-200 bg-white p-5 flex flex-col items-center gap-3">
+                <p className={labelCls}>Vista previa del QR</p>
+                <QRCode value={qrUrl!} size={150} />
+                <p className="text-[11px] text-slate-400 text-center break-all">{qrUrl}</p>
+                <span className="text-xs font-mono font-semibold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-lg">
+                  Nº {certNumber}
+                </span>
+                <p className="text-[10px] text-slate-400 text-center">El código aleatorio se genera al guardar</p>
+              </div>
+            </>
+          )}
         </>
       )}
+
+      {/* Tab: Manual */}
+      {tab === "manual" && (
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-4">
+          <p className="text-xs text-slate-500">
+            Para alumnos que no están en el panel. El certificado se genera con número único y queda disponible para descarga y verificación.
+          </p>
+          <div>
+            <label className={labelCls}>Nombre del alumno</label>
+            <input
+              className={inputCls}
+              placeholder="Ej. María García López"
+              value={studentName}
+              onChange={e => setStudentName(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className={labelCls}>Curso</label>
+            <input
+              className={inputCls}
+              placeholder="Ej. Técnico en Estética"
+              value={courseName}
+              onChange={e => setCourseName(e.target.value)}
+            />
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className={labelCls}>Horas</label>
+              <input type="number" className={inputCls} placeholder="600" value={hours} onChange={e => setHours(e.target.value)} />
+            </div>
+            <div>
+              <label className={labelCls}>Inicio</label>
+              <input type="date" className={inputCls} value={startDate} onChange={e => setStartDate(e.target.value)} />
+            </div>
+            <div>
+              <label className={labelCls}>Fin</label>
+              <input type="date" className={inputCls} value={endDate} onChange={e => setEndDate(e.target.value)} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      <button
+        onClick={handleSubmit}
+        disabled={isPending || !canSubmit}
+        className={btnPrimary}
+      >
+        {isPending
+          ? <><Loader2 className="h-4 w-4 animate-spin" /> Generando...</>
+          : <><Award className="h-4 w-4" /> Generar certificado</>
+        }
+      </button>
+
     </Drawer>
   );
 }

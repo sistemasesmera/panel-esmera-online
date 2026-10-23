@@ -10,3 +10,13 @@ export const createCertificateSchema = z.object({
 });
 
 export type CreateCertificateInput = z.infer<typeof createCertificateSchema>;
+
+export const createManualCertificateSchema = z.object({
+  student_name: z.string().min(1, "Nombre requerido"),
+  course_name:  z.string().min(1, "Curso requerido"),
+  hours:        z.number().nullable().optional(),
+  start_date:   z.string().nullable().optional(),
+  end_date:     z.string().nullable().optional(),
+});
+
+export type CreateManualCertificateInput = z.infer<typeof createManualCertificateSchema>;

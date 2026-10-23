@@ -1,9 +1,10 @@
 "use server";
 
 import { getCurrentUser } from "@/lib/auth/get-current-user";
-import { createCertificateSchema } from "@/lib/domain/certificates/schema";
+import { createCertificateSchema, createManualCertificateSchema } from "@/lib/domain/certificates/schema";
 import {
   createCertificate,
+  createManualCertificate,
   deactivateCertificate,
   updateCertificateSyllabus,
   getEnrollmentPreview,
@@ -22,6 +23,16 @@ export async function createCertificateAction(raw: unknown) {
   if (!preview) throw new Error("Matrícula no encontrada");
 
   return createCertificate(parsed.data, preview.enrollment_number, user.id);
+}
+
+export async function createManualCertificateAction(raw: unknown) {
+  const user = await getCurrentUser();
+  if (!user || user.role !== "administracion") throw new Error("Sin permisos");
+
+  const parsed = createManualCertificateSchema.safeParse(raw);
+  if (!parsed.success) throw new Error(parsed.error.issues[0].message);
+
+  return createManualCertificate(parsed.data, user.id);
 }
 
 export async function deactivateCertificateAction(id: string) {
